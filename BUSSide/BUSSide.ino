@@ -1,3 +1,24 @@
+#include <ArduinoWiFiServer.h>
+#include <BearSSLHelpers.h>
+#include <CertStoreBearSSL.h>
+#include <ESP8266WiFi.h>
+#include <ESP8266WiFiAP.h>
+#include <ESP8266WiFiGeneric.h>
+#include <ESP8266WiFiGratuitous.h>
+#include <ESP8266WiFiMulti.h>
+#include <ESP8266WiFiSTA.h>
+#include <ESP8266WiFiScan.h>
+#include <ESP8266WiFiType.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
+#include <WiFiClientSecureBearSSL.h>
+#include <WiFiServer.h>
+#include <WiFiServerSecure.h>
+#include <WiFiServerSecureBearSSL.h>
+#include <WiFiUdp.h>
+
+#include <SoftwareSerial.h>
+
 #include <Boards.h>
 #include <pins_arduino.h>
 #include "BUSSide.h"
@@ -15,7 +36,7 @@ byte pins[] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
 char * pinnames[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", };
 const byte pinslen = sizeof(pins)/sizeof(pins[0]);  
 
-static uint32_t crc_table[16] = {
+uint32_t crc_table[16] = {
     0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
     0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
     0xedb88320, 0xf00f9344, 0xd6d6a3e8, 0xcb61b38c,
@@ -73,8 +94,8 @@ setup()
   usTicks = asm_ccount();
 }
 
-static uint32_t sequence_number = 1;
-static uint8_t sync[] = "\xfe\xca";
+uint32_t sequence_number = 1;
+uint8_t sync[] = "\xfe\xca";
 
 void
 send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
@@ -88,7 +109,7 @@ send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
     Serial.flush();
 }
 
-static void
+void
 FlushIncoming()
 {
   while (Serial.available() > 0) {
@@ -96,7 +117,7 @@ FlushIncoming()
   }
 }
 
-static void
+void
 Sync()
 {
   while (1) {

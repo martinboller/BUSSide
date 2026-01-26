@@ -6,7 +6,7 @@
 int write_enable(uint32_t spispeed);
 int write_disable(uint32_t spispeed);
 
-static uint8_t
+uint8_t
 spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gpio_MISO, uint8_t data)
 {
   uint8_t x = 0;
@@ -33,7 +33,7 @@ spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gp
   return x;
 }
 
-static int
+int
 spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(gpioIndex[cs], OUTPUT);
@@ -60,7 +60,7 @@ spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint
   return 0;
 }
 
-static int
+int
 spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(CS_GPIO, OUTPUT);
@@ -83,7 +83,7 @@ spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, u
 
   return 0;
 }
-static int
+int
 spi_bb_send_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *in, uint8_t *out, int n)
 {
   pinMode(gpioIndex[cs], OUTPUT);

@@ -6,7 +6,7 @@
 
 uint32_t usTicks = 0;
 
-static int gpioVal[N_GPIO];
+int gpioVal[N_GPIO];
 
 #define sampleTx(pin) digitalRead(pin)
 
@@ -27,9 +27,9 @@ struct uartInfo_s {
   { 0, 0 },
 };
 
-static int uartSpeedIndex;
+int uartSpeedIndex;
 
-static unsigned int
+unsigned int
 findNumberOfUartSpeeds(void)
 {
   unsigned int i;
@@ -38,7 +38,7 @@ findNumberOfUartSpeeds(void)
   return i;
 }
 
-static int
+int
 waitForIdle(int pin)
 {
   unsigned long startTime;
@@ -60,7 +60,7 @@ start:
   return 0;
 }
 
-static int
+int
 buildwidths(int pin, int *widths, int nwidths)
 {
   int val;
@@ -90,7 +90,7 @@ buildwidths(int pin, int *widths, int nwidths)
   return 0;
 }
 
-static unsigned int
+unsigned int
 findminwidth(int *widths, int nwidths)
 {
   int minIndex1;
@@ -107,7 +107,7 @@ findminwidth(int *widths, int nwidths)
 }
 
 
-static float
+float
 autobaud(int pin, int *widths, int nwidths)
 {
   int sum;
@@ -123,7 +123,7 @@ autobaud(int pin, int *widths, int nwidths)
   return (float)sum/(float)c;
 }
 
-static int
+int
 tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
 {
   float width_timepos = 0.0;
@@ -149,7 +149,7 @@ tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
   return 1;
 }
 
-static int
+int
 calcBaud(int pin, int *widths, int nwidths)
 {
   char fstr[6];
@@ -179,7 +179,7 @@ calcBaud(int pin, int *widths, int nwidths)
   return baudIndex;
 }
 
-static int
+int
 calcParity(int frameSize, int stopBits, int *widths, int nwidths)
 {
   float width_timepos = 0.0;
@@ -235,15 +235,15 @@ calcParity(int frameSize, int stopBits, int *widths, int nwidths)
   return 0;
 }
 
-static int frameSize;
-static int stopBits;
-static int dataBits;
-static int parity;
-static float bitTime;
+int frameSize;
+int stopBits;
+int dataBits;
+int parity;
+float bitTime;
 
 #define NWIDTHS 200
 
-static int
+int
 UART_line_settings_direct(struct bs_reply_s *reply, int index)
 {
   int widths[NWIDTHS];

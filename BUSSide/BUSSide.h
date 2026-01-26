@@ -49,7 +49,7 @@ extern char *pinnames[];
 extern const byte pinslen;
 extern uint32_t usTicks;
 
-static inline int32_t
+inline int32_t
 asm_ccount(void)
 {
   int32_t r;

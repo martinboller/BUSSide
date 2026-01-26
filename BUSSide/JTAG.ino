@@ -26,10 +26,10 @@
 // Pattern used for scan() and loopback() tests
 #define PATTERN_LEN              64
 // Use something random when trying find JTAG lines:
-static char mypattern[PATTERN_LEN] = "011001110100110110100001011100100101100111010011010101011010101";
+char mypattern[PATTERN_LEN] = "011001110100110110100001011100100101100111010011010101011010101";
 // Use something more determinate when trying to find
 // length of the DR register:
-//static char mypattern[PATTERN_LEN] = "1000000000000000000000000000000000";
+//char mypattern[PATTERN_LEN] = "1000000000000000000000000000000000";
 
 // Max. number of JTAG enabled chips (MAX_DEV_NR) and length
 // of the DR register together define the number of
@@ -64,14 +64,14 @@ static char mypattern[PATTERN_LEN] = "011001110100110110100001011100100101100111
 // Ignore TCK, TMS use in loopback check:
 #define IGNOREPIN                0xFFFF 
 // Flags configured by UI:
-static boolean VERBOSE                  = FALSE;
-static boolean DELAY                    = FALSE;
-static long    DELAYUS                  = 5; //5000; // 5 MillisecondsHTAGboolean PULLUP                   = TRUE; 
+boolean VERBOSE                  = FALSE;
+boolean DELAY                    = FALSE;
+long    DELAYUS                  = 5; //5000; // 5 MillisecondsHTAGboolean PULLUP                   = TRUE; 
 
 /*
  * Set the JTAG TAP state machine
  */
-static void
+void
 tap_state(char tap_state[], int tck, int tms) 
 {
 #ifdef DEBUGTAP
@@ -93,7 +93,7 @@ tap_state(char tap_state[], int tck, int tms)
 #endif
 }
 
-static int
+int
 JTAG_clock(int tck, int tms, int tdi, int tdo, int tms_state, int tdi_state)
 {
   int tdo_state;
@@ -108,7 +108,7 @@ JTAG_clock(int tck, int tms, int tdi, int tdo, int tms_state, int tdi_state)
   return tdo_state;
 }
 
-static uint32_t
+uint32_t
 JTAG_read32(int tck, int tms, int tdi, int tdo)
 {
   uint32_t r;
@@ -121,7 +121,7 @@ JTAG_read32(int tck, int tms, int tdi, int tdo)
   return r;
 }
 
-static int
+int
 JTAG_ndevices(int tck, int tms, int tdi, int tdo)
 {
   int nbDevices;
@@ -172,7 +172,7 @@ JTAG_ndevices(int tck, int tms, int tdi, int tdo)
   return nbDevices;
 }
 
-static void
+void
 JTAG_scan_chain(int tck, int tms, int tdi, int tdo, int ndevices)
 {
   // go to reset state (that loads IDCODE into IR of all the devices)
@@ -191,7 +191,7 @@ JTAG_scan_chain(int tck, int tms, int tdi, int tdo, int ndevices)
   }
 }
 
-static void
+void
 pulse_tms(int tck, int tms, int s_tms)
 {
   if (tck == IGNOREPIN) return;
@@ -199,7 +199,7 @@ pulse_tms(int tck, int tms, int s_tms)
   digitalWrite(pins[tms], s_tms); 
   digitalWrite(pins[tck], HIGH);
 }
-static void
+void
 pulse_tdi(int tck, int tdi, int s_tdi)
 {
   if (DELAY) delayMicroseconds(50);
@@ -260,7 +260,7 @@ init_pins(int tck = IGNOREPIN, int tms = IGNOREPIN, int tdi = IGNOREPIN, int ntr
  *
  * if retval == 1, *reglen returns the length of the register
  */
-static int
+int
 check_data(char pattern[], int iterations, int tck, int tdi, int tdo, int *reg_len)
 {
   int i;
@@ -310,7 +310,7 @@ check_data(char pattern[], int iterations, int tck, int tdi, int tdo, int *reg_l
   return nr_toggle > 1 ? nr_toggle : 0;
 }
 
-static void
+void
 print_pins(int tck, int tms, int tdo, int tdi, int ntrst)
 {
   if (VERBOSE) {
@@ -335,7 +335,7 @@ print_pins(int tck, int tms, int tdo, int tdi, int ntrst)
  * Shift JTAG TAP to ShiftIR state. Send pattern to TDI and check
  * for output on TDO
  */
-static int
+int
 scan(int *tck_pin, int *tms_pin, int *tdi_pin, int *tdo_pin, int *ntrst_pin)
 {
   int tck, tms, tdo, tdi, ntrst;
@@ -410,7 +410,7 @@ scan(int *tck_pin, int *tms_pin, int *tdi_pin, int *tdo_pin, int *ntrst_pin)
  * the test again without the cable connected between controller
  * and target. Run with the verbose flag to examine closely.
  */
-static void
+void
 loopback_check()
 {
   int tdo, tdi;
@@ -459,7 +459,7 @@ loopback_check()
 }
 
 #if 0
-static void
+void
 list_pin_names()
 {
   int pin;
@@ -480,7 +480,7 @@ list_pin_names()
  * (oppposite to the old code).
  * If we get an IDCODE of all ones, we assume that the pins are wrong.
  */
-static void
+void
 scan_idcode()
 {
   int tck, tms, tdo, tdi, ntrst;
@@ -563,7 +563,7 @@ scan_idcode()
   } /* for(trst=0; ...) */
 }
 
-static void
+void
 shift_bypass()
 {
   int tdi, tdo, tck;
@@ -626,7 +626,7 @@ shift_bypass()
  * Shift in state[] as IR value.
  * Switch to ShiftDR state and end.
  */
-static void
+void
 ir_state(char state[], int tck, int tms, int tdi) 
 {
 #ifdef DEBUGIR
@@ -660,7 +660,7 @@ ir_state(char state[], int tck, int tms, int tdi)
   // a reset would cause IDCODE instruction to be selected again
   tap_state("1100", tck, tms); // -1> UpdateIR -1> SelectDR -0> CaptureDR -0> ShiftDR
 }
-static void
+void
 sample(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN)
 {
   init_pins(tck, tms ,tdi, ntrst);  
@@ -682,7 +682,7 @@ sample(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN)
 }
 
 char ir_buf[IR_LEN+1];
-static void
+void
 brute_ir(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN)
 {
   init_pins(tck, tms ,tdi, ntrst);  
@@ -725,7 +725,7 @@ brute_ir(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN
 }
 
 #if 0
-static void
+void
 set_pattern()
 {
   int i;

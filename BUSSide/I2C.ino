@@ -65,29 +65,18 @@ read_I2C_eeprom(struct bs_request_s *request)
 }
 
 
-int
-write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength, uint32_t val)
+int write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength, uint32_t val)
 {
-    Wire.beginTransmission(slaveAddress);
-    switch (addressLength) {
-      case 2:
-        Wire.write((skipsize & 0xff00) >> 8); // send the high byte of the EEPROM memory address
-      case 1:
-        Wire.write((skipsize & 0x00ff)); // send the low byte
-        break;
-      default:
-        Wire.endTransmission();
-        return -1;
-    }
-    Wire.write(val);
-    Wire.endTransmission();
+    // ... (rest of your switch and write logic)
+    
     for (int i = 0; i < 100; i++) {
       Wire.beginTransmission(slaveAddress);
       if (Wire.endTransmission() == 0) {
-        return 0;
+        return 0; // Success
       }
       delay(10);
     }
+    return -1; // <--- ADD THIS: Return -1 if the loop times out
 }
 
 struct bs_frame_s*
@@ -135,7 +124,7 @@ write_I2C_eeprom(struct bs_request_s *request)
   return reply;
 }
 
-static void
+void
 I2C_active_scan1(struct bs_request_s *request, struct bs_reply_s *reply, int sdaPin, int sclPin)
 {
   uint32_t *reply_data;
