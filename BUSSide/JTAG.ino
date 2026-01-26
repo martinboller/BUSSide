@@ -42,8 +42,8 @@ char mypattern[PATTERN_LEN] = "0110011101001101101000010111001001011001110100110
 #define IR_LEN                   5
 // IR registers must be IR_LEN wide:
 #define IR_IDCODE                "01100" // always 011
-#define IR_SAMPLE                "10100" // always 101
-#define IR_PRELOAD               IR_SAMPLE
+#define IR_SAMPLE                "10100"// always 101
+#define IR_PRELOAD               const char IR_SAMPLE
 
 /*
  * END USER DEFINITIONS
@@ -72,7 +72,7 @@ long    DELAYUS                  = 5; //5000; // 5 MillisecondsHTAGboolean PULLU
  * Set the JTAG TAP state machine
  */
 void
-tap_state(char tap_state[], int tck, int tms) 
+tap_state(const char tap_state[], int tck, int tms) 
 {
 #ifdef DEBUGTAP
   Serial.print("tap_state: tms set to: ");
@@ -627,7 +627,7 @@ shift_bypass()
  * Switch to ShiftDR state and end.
  */
 void
-ir_state(char state[], int tck, int tms, int tdi) 
+ir_state(const char state[], int tck, int tms, int tdi) 
 {
 #ifdef DEBUGIR
   Serial.println("ir_state: set TAP to ShiftIR:");

@@ -30,10 +30,10 @@ void reset_gpios();
 
 int gpio[N_GPIO];
 int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
-char *gpioName[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
+const char *gpioName[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
 
 byte pins[] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
-char * pinnames[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", };
+const char * pinnames[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", };
 const byte pinslen = sizeof(pins)/sizeof(pins[0]);  
 
 uint32_t crc_table[16] = {
@@ -53,7 +53,7 @@ unsigned long crc_update(unsigned long crc, byte data)
     return crc;
 }
 
-unsigned long crc_mem(char *s, int n)
+unsigned long crc_mem(const char *s, int n)
 {
   unsigned long crc = ~0L;
   for (int i = 0; i < n; i++)
@@ -76,7 +76,7 @@ void
 reset_gpios()
 {
   int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
-  char *gpioName[N_GPIO] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
+  const char *gpioName[N_GPIO] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
 
   for (int i = 0; i < N_GPIO; i++) {
     pinMode(gpioIndex[i], INPUT);
@@ -104,7 +104,7 @@ send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
     Serial.flush();
     reply->bs_sequence_number = request->bs_sequence_number;
     reply->bs_checksum = 0;
-    reply->bs_checksum = crc_mem((char *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
+    reply->bs_checksum = crc_mem((const char *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
     Serial.write((uint8_t *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
     Serial.flush();
 }
@@ -170,7 +170,7 @@ loop()
     }
     
     request->bs_checksum = 0;
-    if (crc_mem((char *)request, BS_HEADER_SIZE + request->bs_payload_length) != header.bs_checksum) {
+    if (crc_mem((const char *)request, BS_HEADER_SIZE + request->bs_payload_length) != header.bs_checksum) {
       return;
     }
     if (request->bs_sequence_number <= sequence_number)

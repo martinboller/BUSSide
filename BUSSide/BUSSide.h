@@ -19,7 +19,7 @@ struct bs_frame_s {
 #define bs_reply_s bs_frame_s
 
 unsigned long crc_update(unsigned long crc, byte data);
-unsigned long crc_mem(char *s, int n);
+unsigned long crc_mem(const char *s, int n);
 void delay_us(int us);
 
 struct bs_frame_s *disable_write_protection(struct bs_request_s *request);
@@ -45,7 +45,7 @@ struct bs_frame_s *spi_read_id_bb(struct bs_request_s *request);
 struct bs_frame_s *read_SPI_flash_bitbang(struct bs_request_s *request);
 
 extern byte pins[];
-extern char *pinnames[];
+extern const char *pinnames[];
 extern const byte pinslen;
 extern uint32_t usTicks;
 
