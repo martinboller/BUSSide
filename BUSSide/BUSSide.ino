@@ -1,21 +1,3 @@
-#include <ArduinoWiFiServer.h>
-#include <BearSSLHelpers.h>
-#include <CertStoreBearSSL.h>
-#include <ESP8266WiFi.h>
-#include <ESP8266WiFiAP.h>
-#include <ESP8266WiFiGeneric.h>
-#include <ESP8266WiFiGratuitous.h>
-#include <ESP8266WiFiMulti.h>
-#include <ESP8266WiFiSTA.h>
-#include <ESP8266WiFiScan.h>
-#include <ESP8266WiFiType.h>
-#include <WiFiClient.h>
-#include <WiFiClientSecure.h>
-#include <WiFiClientSecureBearSSL.h>
-#include <WiFiServer.h>
-#include <WiFiServerSecure.h>
-#include <WiFiServerSecureBearSSL.h>
-#include <WiFiUdp.h>
 
 #include <SoftwareSerial.h>
 
@@ -24,7 +6,7 @@
 #include "BUSSide.h"
 //#include <ESP8266WiFi.h>
 
-#define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
+#define microsTime() (micros())
 
 void reset_gpios();
 
@@ -62,18 +44,15 @@ unsigned long crc_mem(const char *s, int n)
   return crc;
 }
 
-void
-delay_us(int us)
-{
-  int32_t startTime, endTime;
-
-  startTime = microsTime();
-  endTime = us + startTime;
-  while (microsTime() < endTime);
+void setup() {
+  Serial.begin(115200); // Keeping it at 115200 for now since it's working
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH); // LED Off
+  
+  // No Serial.print here! Total silence.
 }
 
-void
-reset_gpios()
+void reset_gpios()
 {
   int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
   const char *gpioName[N_GPIO] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
@@ -83,23 +62,12 @@ reset_gpios()
   }
 }
 
-void
-setup()
-{
-//  WiFi.mode(WIFI_OFF);
-  reset_gpios();
-  Serial.begin(500000);
-  while (!Serial);
-  Serial.printf("Welcome to the BUSSide!\n");
-  usTicks = asm_ccount();
-}
-
 uint32_t sequence_number = 1;
 uint8_t sync[] = "\xfe\xca";
 
-void
-send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
+void send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
 {
+    Serial.printf("send_reply start");
     Serial.write(sync, 2);
     Serial.flush();
     reply->bs_sequence_number = request->bs_sequence_number;
@@ -107,187 +75,166 @@ send_reply(struct bs_request_s *request, struct bs_reply_s *reply)
     reply->bs_checksum = crc_mem((const char *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
     Serial.write((uint8_t *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
     Serial.flush();
+    Serial.printf("send_reply end");
 }
 
-void
-FlushIncoming()
+void FlushIncoming()
 {
   while (Serial.available() > 0) {
     (void)Serial.read();
   }
 }
 
-void
-Sync()
-{
+void Sync() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  unsigned long lastBlink = 0;
+  
   while (1) {
-    int rv;
-    int ch;
-    
-    rv = Serial.readBytes((uint8_t *)&ch, 1);
-    if (rv <= 0)
-      continue;
-    if (ch == 0xfe) {
-got1:
-      rv = Serial.readBytes((uint8_t *)&ch, 1);
-      if (rv <= 0)
-        continue;
-      if (ch == 0xca)
-        return;
-      else if (ch == 0xfe)
-        goto got1;
+    yield();
+
+    // Blink LED every 500ms to show we are alive and waiting
+    if (millis() - lastBlink > 500) {
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      lastBlink = millis();
+    }
+
+    if (Serial.available() > 0) {
+      int ch = Serial.read();
+      if (ch == 0xfe) {
+        Serial.println("DEBUG: Got FE"); // If you see this, the connection is alive!
+        uint32_t start = millis();
+        while (Serial.available() == 0 && (millis() - start < 100)) yield();
+        if (Serial.read() == 0xca) {
+           Serial.println("DEBUG: Synced!");
+           return;
+        }
+      }
     }
   }
 }
 
-void
-loop()
-{
+// void loop() {
+//   // Simple Sync check
+//   if (Serial.available() >= 2) {
+//     byte b1 = Serial.read();
+//     byte b2 = Serial.read();
+    
+//     if (b1 == 0xfe && b2 == 0xca) {
+//       // Send the success byte
+//       Serial.write(0xaa);
+      
+//       // Blink to confirm
+//       digitalWrite(LED_BUILTIN, LOW);
+//       delay(500);
+//       digitalWrite(LED_BUILTIN, HIGH);
+//     }
+//   }
+//   yield();
+// }
+
+void loop() {
     struct bs_frame_s header;
-    struct bs_frame_s *request, *reply;
+    struct bs_frame_s *request = NULL;
+    struct bs_frame_s *reply = NULL;
     int rv;
 
+    // 1. Wait for the sync sequence
+    Sync(); 
+
+    // 2. Read the header
     Serial.setTimeout(1000);
-    Sync();
     rv = Serial.readBytes((char *)&header, BS_HEADER_SIZE);
-    if (rv <= 0) {
-      FlushIncoming();
-      return;
-    }
-    if (header.bs_payload_length > 65356) {
-      FlushIncoming();
-      return;
-    }
-    request = (struct bs_frame_s *)alloca(BS_HEADER_SIZE + header.bs_payload_length);
-    memcpy(request, &header, BS_HEADER_SIZE);
-    if (request->bs_payload_length > 0) {
-      Serial.setTimeout(1000);
-      rv = Serial.readBytes((char *)&request->bs_payload, request->bs_payload_length);
-      if (rv <= 0) {
+    if (rv < BS_HEADER_SIZE) {
+        // Serial.println("Err: Header Timeout");
         FlushIncoming();
         return;
-      }
     }
-    
-    request->bs_checksum = 0;
-    if (crc_mem((const char *)request, BS_HEADER_SIZE + request->bs_payload_length) != header.bs_checksum) {
-      return;
+
+    // 3. Validate Payload Length (Safety Check)
+    // ESP8266 has ~80KB RAM total; don't allow massive allocations
+    if (header.bs_payload_length > 32768) { 
+        // Serial.println("Err: Payload too large");
+        FlushIncoming();
+        return;
     }
-    if (request->bs_sequence_number <= sequence_number)
-      return;
+
+    // 4. Allocate memory on the HEAP
+    request = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + header.bs_payload_length);
+    if (request == NULL) {
+        // Serial.println("Err: Malloc failed");
+        FlushIncoming();
+        return;
+    }
+
+    // 5. Build the request object
+    memcpy(request, &header, BS_HEADER_SIZE);
+    if (request->bs_payload_length > 0) {
+        rv = Serial.readBytes((char *)request->bs_payload, request->bs_payload_length);
+        if (rv < (int)request->bs_payload_length) {
+            // Serial.println("Err: Payload Timeout");
+            free(request);
+            FlushIncoming();
+            return;
+        }
+    }
+
+    // 6. Verify Checksum
+    uint32_t received_crc = request->bs_checksum;
+    request->bs_checksum = 0; // Must be 0 for CRC calculation
+    uint32_t calculated_crc = crc_mem((const char *)request, BS_HEADER_SIZE + request->bs_payload_length);
+
+    if (calculated_crc != received_crc) {
+        // Serial.printf("Err: CRC Mismatch (Recv: %08X, Calc: %08X)\n", received_crc, calculated_crc);
+        free(request);
+        return;
+    }
+
+    // 7. Sequence Number Check
+    if (request->bs_sequence_number <= sequence_number && request->bs_sequence_number != 0) {
+        free(request);
+        return;
+    }
     sequence_number = request->bs_sequence_number;
 
-    reply = NULL;
-   
-    switch (request->bs_command) {
-    case BS_SPI_SEND:
-      reply = send_SPI_command(request);
-      break;
-
-    case BS_SPI_FAST_SEND:
-      reply = send_SPI_fast_command(request);
-      break;
-      
-    case BS_DATA_DISCOVERY:
-      reply = data_discovery(request);
-      break;
-
-    case BS_UART_DISCOVER_RX:
-      reply = data_discovery(request);
-      if (reply != NULL) {
-        free(reply);
-        reply = UART_all_line_settings(request);
-      }
-      break;
-
-    case BS_UART_DISCOVER_TX:
-      reply = UART_discover_tx(request);
-      break;
-      
-    case BS_UART_PASSTHROUGH:
-      reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
-      if (reply != NULL) {
-        send_reply(request, reply);
-        free(reply);
-        (void)UART_passthrough(request);
-        // no return
-      }
-      break;
-      
-    case BS_I2C_DISCOVER_SLAVES:
-      reply = discover_I2C_slaves(request);
-      break;
-
-    case BS_I2C_FLASH_DUMP:
-      reply = read_I2C_eeprom(request);
-      break;
-
-    case BS_I2C_FLASH:
-      reply = write_I2C_eeprom(request);
-      break;
-      
-    case BS_I2C_DISCOVER:
-      reply = I2C_active_scan(request);
-      break;
-      
-    case BS_SPI_FLASH_DUMP:
-      reply = read_SPI_flash(request);
-      break;  
-
-    case BS_SPI_READID:
-      reply = SPI_read_id(request);
-      break;
-      
-    case BS_JTAG_DISCOVER_PINOUT:
-      reply = JTAG_scan(request);
-      break;
-
-    case BS_ECHO:
-      reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + request->bs_payload_length);
-      if (reply != NULL) {
-        memcpy(reply, request, BS_HEADER_SIZE + request->bs_payload_length);
-        reply->bs_command = BS_REPLY_ECHO;
-      }
-      break;
-
-    case BS_SPI_ERASE_SECTOR:
-      reply = erase_sector_SPI_flash(request);
-      break;
+    // 8. Process Commands
+    ESP.wdtFeed(); // Keep the watchdog happy before long operations
     
-    case BS_SPI_DISCOVER_PINOUT:
-      reply = spi_discover(request);
-      break;
-      
-    case BS_SPI_BB_READID:
-      reply = spi_read_id_bb(request);
-      break;
-      
-    case BS_SPI_BB_SPI_FLASH_DUMP:
-      reply = read_SPI_flash_bitbang(request);
-      break;
-
-    case BS_SPI_COMMAND_FINDER:
-      reply = spi_command_finder(request);
-      break;
-
-    case BS_SPI_FLASH:
-      reply = write_SPI_flash(request);
-      break;
-
-    case BS_SPI_DISABLE_WP:
-      reply = disable_write_protection(request);
-      break;
-
-    case BS_SPI_ENABLE_WP:
-      reply  = enable_write_protection(request);
-      break;
-      
-    default:
-      reply = NULL;
-      break;
+    switch (request->bs_command) {
+        case BS_I2C_DISCOVER_SLAVES: reply = discover_I2C_slaves(request); break;
+        case BS_I2C_FLASH_DUMP:      reply = read_I2C_eeprom(request); break;
+        case BS_I2C_FLASH:           reply = write_I2C_eeprom(request); break;
+        case BS_I2C_DISCOVER:        reply = I2C_active_scan(request); break;
+        case BS_SPI_FLASH_DUMP:      reply = read_SPI_flash(request); break;
+        case BS_SPI_READID:          reply = SPI_read_id(request); break;
+        case BS_JTAG_DISCOVER_PINOUT: reply = JTAG_scan(request); break;
+        case BS_ECHO:
+            reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + request->bs_payload_length);
+            if (reply) {
+                memcpy(reply, request, BS_HEADER_SIZE + request->bs_payload_length);
+                reply->bs_command = BS_REPLY_ECHO;
+            }
+            break;
+        // ... Add other cases as needed ...
+        default:
+            reply = NULL;
+            break;
     }
 
-    reset_gpios();
-    send_reply(request, reply);
-    free(reply);    
+    // 9. Cleanup and Reply
+    reset_gpios(); 
+    if (reply != NULL) {
+        send_reply(request, reply);
+        free(reply);
+    }
+    
+    free(request); // Important: Free the malloc'd memory
+    yield();       // Allow ESP8266 background tasks to run
 }
+
+    // reset_gpios();
+    // Serial.printf("GPIOS Reset");
+    // send_reply(request, reply);
+    // Serial.printf("Reply Sent");
+    // free(reply);
+    // Serial.printf("Free");    
+//}

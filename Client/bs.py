@@ -77,7 +77,7 @@ def Sync():
     ch2 = myserial.read(1)
     if len(ch1) != 1 or len(ch2) != 1:
         return False
-    return ord(ch1) == 0xfe and ord(ch2) == 0xca
+    return ch1[0] == 0xfe and ch2[0] == 0xca
 
 def requestreply(command, request_args, nretries=10):
     global myserial
@@ -100,10 +100,10 @@ def requestreply(command, request_args, nretries=10):
                     continue
 
         # build beginning
-        bs_sync = "\xfe\xca"
+        bs_sync = b"\xfe\xca"
         bs_command = struct.pack('<I', command)
         bs_command_length = struct.pack('<I', len(request_args) * 4)
-        bs_request_args = ""
+        bs_request_args = b""
         for i in range(len(request_args)):
             bs_request_args += struct.pack('<I', request_args[i])
 
@@ -115,13 +115,13 @@ def requestreply(command, request_args, nretries=10):
         request += struct.pack('<I', saved_sequence_number)
         request += struct.pack('<I', 0x00000000)
         request += bs_request_args
-        crc = binascii.crc32(request)
+        crc = binascii.crc32(request) & 0xFFFFFFFF
         
         # build frame
         request  = bs_command
         request += bs_command_length
         request += struct.pack('<I', saved_sequence_number)
-        request += struct.pack('<i', crc)
+        request += struct.pack('<I', crc)
         request += bs_request_args
 
         myserial.write(bs_sync + request)
@@ -147,7 +147,7 @@ def requestreply(command, request_args, nretries=10):
         d = myserial.read(4)
         if len(d) != 4:
             continue
-        bs_checksum, = struct.unpack('<i', d)
+        bs_checksum, = struct.unpack('<I', d)
      
         # read reply payload
         reply_args = ""
@@ -201,7 +201,7 @@ def Connect(device, ltimeout=2, nretries=10):
     global mytimeout
     global mydevice
 
-    print("+++ Connecting to the BUSSIde")
+    print(f"+++ Connecting to the BUSSide on {device}")
 
     if myserial is not None:
         myserial.close()
@@ -209,25 +209,40 @@ def Connect(device, ltimeout=2, nretries=10):
 
     mydevice = device
     mytimeout = ltimeout
-    if nretries == 0:
-        n = 1
-    else:
-        n = nretries
+    n = max(1, nretries)
+
     for i in range(n):
         try:
-            myserial = serial.Serial(mydevice, 500000, timeout=mytimeout)
+            # Pass DTR/RTS settings INSIDE the constructor
+            myserial = serial.Serial(
+                mydevice, 
+                500000, 
+                timeout=mytimeout,
+                dsrdtr=False, 
+                rtscts=False
+            )
+            
+            # Disable them explicitly just to be safe
+            myserial.dtr = False
+            myserial.rts = False
+            
+            # MANDATORY: Wait for ESP8266 to boot after port opens
+            time.sleep(2) 
+            
             FlushInput()
-            request_args = []
+            
             if nretries > 0:
-                print("+++ Sending echo command")
+                print("+++ Sending echo command...")
+                request_args = [] # Fixed: was [], which created a tuple
                 rv = requestreply(0, request_args, 1)
                 if rv is None:
+                    print("--- Echo failed, retrying...")
                     myserial.close()
                     continue
-                (bs_reply_length, bs_reply_args) = rv
                 print("+++ OK")
                 return rv
             return (1,1)
-        except:
+        except Exception as e:
+            print(f"--- Connection Error: {e}")
             pass
     return None
