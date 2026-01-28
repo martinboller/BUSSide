@@ -101,8 +101,8 @@ void Sync() {
   while (1) {
     yield();
 
-    //Blink LED every 500ms to show we are alive and waiting
-      if (millis() - lastBlink > 100) {
+    //Blink LED every 2000ms to show we are alive and waiting
+      if (millis() - lastBlink > 2000) {
        digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
        lastBlink = millis();
     }

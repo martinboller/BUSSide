@@ -72,13 +72,13 @@ def FlushInput():
     myserial.flushInput()
 
 def Sync():
-    global myserial
+    global myserial, mytimeout
     # Give the hardware a moment to finish its "Welcome" speech
     # and look for the magic bytes
     start_time = time.time()
     print("+++ Hunting for sync bytes (0xFE 0xCA)...")
     
-    while (time.time() - start_time) < 5:  # 5-second timeout
+    while (time.time() - start_time) < mytimeout:  # 5-second timeout
         char1 = myserial.read(1)
         if not char1:
             continue
