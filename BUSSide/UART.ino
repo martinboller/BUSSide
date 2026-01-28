@@ -387,7 +387,12 @@ UART_passthrough(struct bs_request_s *request)
   uint32_t *request_args;
   int rxpin, txpin;
   int baudrate;
-
+  unsigned long lastBlink = 0;
+   //Blink LED every 500ms to show we are alive and waiting
+      if (millis() - lastBlink > 500) {
+       digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+       lastBlink = millis();
+    }
   request_args = (uint32_t *)&request->bs_payload[0];
   rxpin = request_args[0];
   txpin = request_args[1];

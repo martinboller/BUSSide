@@ -2,7 +2,7 @@ import serial
 import time
 
 # 1. Match the speed exactly
-BAUD = 500000 
+BAUD = 115200 
 ser = serial.Serial('/dev/ttyUSB0', BAUD, timeout=1, dsrdtr=False, rtscts=False)
 
 # 2. Wait for the 'Welcome' garbage to finish

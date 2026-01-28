@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import time
 import struct
@@ -12,11 +12,12 @@ import termios
 import fcntl
 
 mydevice = None
-mytimeout = 2
+mytimeout = 10
 myserial = None
 sequence_number = 5
 oldterm = 0
 oldflags = 0
+baudrate = 500000
 
 def keys_isData():
     return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
@@ -72,12 +73,23 @@ def FlushInput():
 
 def Sync():
     global myserial
-
-    ch1 = myserial.read(1)
-    ch2 = myserial.read(1)
-    if len(ch1) != 1 or len(ch2) != 1:
-        return False
-    return ch1[0] == 0xfe and ch2[0] == 0xca
+    # Give the hardware a moment to finish its "Welcome" speech
+    # and look for the magic bytes
+    start_time = time.time()
+    print("+++ Hunting for sync bytes (0xFE 0xCA)...")
+    
+    while (time.time() - start_time) < 5:  # 5-second timeout
+        char1 = myserial.read(1)
+        if not char1:
+            continue
+            
+        if char1[0] == 0xfe:
+            char2 = myserial.read(1)
+            if char2 and char2[0] == 0xca:
+                print("+++ Sync Achieved!")
+                return True
+    print("--- Sync Timeout: Magic bytes not found.")
+    return False
 
 def requestreply(command, request_args, nretries=10):
     global myserial
@@ -123,7 +135,7 @@ def requestreply(command, request_args, nretries=10):
         request += struct.pack('<I', saved_sequence_number)
         request += struct.pack('<I', crc)
         request += bs_request_args
-
+        #print(f"DEBUG: Sending Command {command} with args {request_args}")
         myserial.write(bs_sync + request)
         myserial.flush()
 
@@ -150,13 +162,13 @@ def requestreply(command, request_args, nretries=10):
         bs_checksum, = struct.unpack('<I', d)
      
         # read reply payload
-        reply_args = ""
+        reply_args = b""
         if reply_length == 0:
             bs_reply_args = []
         else:
-            bs_reply_args = list(range(reply_length / 4))
+            bs_reply_args = list(range(reply_length // 4))
             fail = False
-            for i in range(reply_length / 4):
+            for i in range(reply_length // 4):
                 s = myserial.read(4)
                 if len(s) != 4:
                     fail = True
@@ -172,7 +184,7 @@ def requestreply(command, request_args, nretries=10):
         reply += bs_sequence_number
         reply += struct.pack('<I', 0x00000000)
         reply += reply_args
-        crc = binascii.crc32(reply)
+        crc = binascii.crc32(reply) & 0xFFFFFFFF
 
         # error checks
         if crc != bs_checksum:
@@ -192,9 +204,11 @@ def getSerial():
     return myserial
 
 def NewTimeout(ltimeout):
-    global mydevice
-
-    Connect(mydevice, ltimeout, 0)
+    global myserial
+    global mytimeout
+    mytimeout = ltimeout
+    if myserial:
+        myserial.timeout = ltimeout # Critical: Update the hardware timeout
 
 def Connect(device, ltimeout=2, nretries=10):
     global myserial
@@ -216,7 +230,7 @@ def Connect(device, ltimeout=2, nretries=10):
             # Pass DTR/RTS settings INSIDE the constructor
             myserial = serial.Serial(
                 mydevice, 
-                500000, 
+                baudrate, 
                 timeout=mytimeout,
                 dsrdtr=False, 
                 rtscts=False

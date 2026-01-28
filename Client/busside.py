@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import struct
 import os
@@ -85,7 +85,7 @@ print("+++")
 
 while True:
     try:
-        command = raw_input("> ")
+        command = input("> ")
     except:
         break
     rv = doCommand(command)

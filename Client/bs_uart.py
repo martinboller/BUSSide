@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 import bs
 import binascii
@@ -73,29 +73,44 @@ def uart_rx():
     return (bs_reply_length, bs_reply_args)
 
 def uart_passthrough(gpiorx, gpiotx, baudrate):
+    # Convert to 0-indexed for the firmware
     request_args = [gpiorx-1, gpiotx-1, baudrate]
-    bs.NewTimeout(30)
+    bs.NewTimeout(5)
+    
+    # Send the command
     rv = bs.requestreply(19, request_args)
     if rv is None:
+        print("--- Failed to enter passthrough (No Sync)")
         return None
-    (bs_reply_length, bs_reply_args) = rv
-    print("+++ Entering passthrough mode")
+
+    print("+++ Entering passthrough mode. Press Ctrl+C to exit.")
     bs.keys_init()
     ser = bs.getSerial()
-    while True:
-        if ser.inWaiting() > 0:
-            ch = ser.read(1)
-            sys.stdout.write(ch)
-            sys.stdout.flush()
-        inCh = bs.keys_getchar()
-        if inCh is not None:
-            ser.write(inCh)
-        # not reached
-    bs.keys_cleanup()
-    return None
-
+    
+    try:
+        while True:
+            # Check if data is coming FROM the device
+            if ser.in_waiting > 0:
+                ch = ser.read(ser.in_waiting)
+                # Python 3: Must decode bytes to string to write to stdout
+                sys.stdout.write(ch.decode('utf-8', errors='ignore'))
+                sys.stdout.flush()
+            
+            # Check if user pressed a key TO send to device
+            inCh = bs.keys_getchar()
+            if inCh is not None:
+                # Python 3: Must encode string to bytes to write to serial
+                ser.write(inCh.encode('utf-8'))
+    except KeyboardInterrupt:
+        print("\n+++ Passthrough terminated by user.")
+    finally:
+        bs.keys_cleanup()
+        # IMPORTANT: You must reset the NodeMCU hardware now!
+        
 def uart_passthrough_auto():
+    txpin = 0xffffffff
     rv = uart_rx()
+    print("Debug: uart pt auto")
     if rv is None:
         print("+++ NOT FOUND")
         return 0

@@ -2,7 +2,7 @@ import serial
 import time
 
 # Use a low baud rate for the "Acid Test"
-BAUD = 500000 
+BAUD = 115200
 
 # Open the port but DON'T initialize yet
 ser = serial.Serial()
