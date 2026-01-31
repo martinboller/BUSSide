@@ -4,8 +4,7 @@
 
 This file contains small utility functions that call into the low-level
 `bs` framing API to discover UART signals and to provide a passthrough
-terminal mode. Only short docstrings/comments are added so runtime
-behavior and indentation remain unchanged.
+terminal mode.
 """
 
 import bs
