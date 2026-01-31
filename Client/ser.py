@@ -6,7 +6,7 @@ BAUD = 115200
 
 # Open the port but DON'T initialize yet
 ser = serial.Serial()
-ser.port = '/dev/ttyUSB0'
+ser.port = "/dev/ttyUSB0"
 ser.baudrate = BAUD
 ser.timeout = 1
 ser.setDTR(False)
@@ -15,10 +15,10 @@ ser.setRTS(False)
 try:
     ser.open()
     # Some drivers need them to be TRUE to stay high (inactive)
-    ser.dtr = True 
+    ser.dtr = True
     ser.rts = True
     time.sleep(1)
-    
+
     print("Listening for data...")
     while True:
         if ser.in_waiting > 0:

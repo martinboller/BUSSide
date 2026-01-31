@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
 
-import os
-import sys
-# Ensure the Client/ directory is on sys.path when running from repo root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "Client"))
-
 import struct
-import traceback
+import sys
 import bs_i2c
 import bs_uart
 import bs_jtag
@@ -74,7 +69,7 @@ def doCommand(command):
 try:
     with open("/tmp/BUSSide.seq", "rb") as f:
         d = f.read(4)
-        if len(d) == 4:
+        if len(d) == 4: 
             (seq,) = struct.unpack("<I", d)
             bs.set_sequence_number(seq)
 except Exception:
@@ -99,24 +94,10 @@ while True:
         command = input("> ")
     except (EOFError, KeyboardInterrupt):
         break
-
-    # Centralized handling: catch Ctrl-C and unexpected exceptions from
-    # module command handlers and print helpful diagnostics.
-    try:
-        rv = doCommand(command)
-    except KeyboardInterrupt:
-        # User intentionally interrupted the running command.
-        print("\\n--- Command interrupted by user (Ctrl-C).")
-        continue
-    except Exception:
-        # Print a detailed traceback so the user can report the issue.
-        print("\\n--- ERROR: Exception while executing command:")
-        traceback.print_exc()
-        continue
-
+    rv = doCommand(command)
     if rv is None:
         printHelp()
     elif rv == -1:
         break
 
-print("Ciao!")
+print("Bye!")

@@ -6,35 +6,41 @@
 int write_enable(uint32_t spispeed);
 int write_disable(uint32_t spispeed);
 
-uint8_t
-spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gpio_MISO, uint8_t data)
+/**
+ * spi_transfer_byte: Sends and receives 1 byte manually.
+ * This "bit-bangs" the protocol by toggling pins in a loop.
+ */
+uint8_t spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gpio_MISO, uint8_t data)
 {
   uint8_t x = 0;
 
-  ESP.wdtFeed();
-  digitalWrite(gpio_CLK, LOW);
+  ESP.wdtFeed(); // Keep the system from rebooting during the loop
+  digitalWrite(gpio_CLK, LOW); // Ensure clock starts low (Mode 0)
   
-  for (int i = 0x80; i; i >>= 1) {
+  for (int i = 0x80; i; i >>= 1) {// Iterate through each of the 8 bits (MSB first)
+    // 1. Set the MOSI (Output) pin
     if (data & i) {
       digitalWrite(gpio_MOSI, HIGH);
     } else {
       digitalWrite(gpio_MOSI, LOW);
     }
-    delay_us(50);
+    delay_us(50); // Small delay to satisfy chip timing requirements
     
+    // 2. Pulse the CLK (Clock) high
     digitalWrite(gpio_CLK, HIGH);
-    delay_us(50);  
-      
+    delay_us(50); // Small delay to satisfy chip timing requirements
+
+    // 3. Read the MISO (Input) pin while the clock is high  
     if(digitalRead(gpio_MISO) == HIGH) {
-      x |= i;
+      x |= i; // Construct the return byte bit-by-bit
     }
+    // 4. Return clock to low to finish the cycle for this bit
     digitalWrite(gpio_CLK, LOW);
   }
   return x;
 }
 
-int
-spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
+int spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(gpioIndex[cs], OUTPUT);
   pinMode(gpioIndex[clk], OUTPUT);
@@ -60,8 +66,7 @@ spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint
   return 0;
 }
 
-int
-spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
+int spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(CS_GPIO, OUTPUT);
   digitalWrite(CS_GPIO, HIGH);
@@ -83,8 +88,7 @@ spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, u
 
   return 0;
 }
-int
-spi_bb_send_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *in, uint8_t *out, int n)
+int spi_bb_send_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *in, uint8_t *out, int n)
 {
   pinMode(gpioIndex[cs], OUTPUT);
   pinMode(gpioIndex[clk], OUTPUT);
@@ -388,6 +392,10 @@ send_SPI_command(struct bs_request_s *request)
   return reply;
 }
 
+/**
+ * read_SPI_flash: Dumps data from a Flash chip.
+ * Uses standard command 0x03 (Read Data).
+ */
 struct bs_frame_s*
 read_SPI_flash(struct bs_request_s *request)
 {

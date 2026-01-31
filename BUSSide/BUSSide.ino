@@ -1,4 +1,4 @@
-
+// EspSoftwareSerial Library
 #include <SoftwareSerial.h>
 
 #include <Boards.h>
@@ -8,8 +8,10 @@
 
 #define microsTime() (micros())
 
+// Forward declaration of the safety function to reset pins
 void reset_gpios();
 
+// Mapping the virtual GPIO names to physical ESP8266 pins
 int gpio[N_GPIO];
 int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
 const char *gpioName[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
@@ -27,8 +29,11 @@ const char *pinnames[] = {
   "D8",
 };
 const byte pinslen = sizeof(pins) / sizeof(pins[0]);
+
+// High-speed baud rate for fast data dumping (500kbps)
 int baudRate = 500000;
 
+// Precomputed table for CRC32 calculation to ensure data integrity
 uint32_t crc_table[16] = {
   0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
   0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
@@ -36,6 +41,7 @@ uint32_t crc_table[16] = {
   0x9b64c2b0, 0x86d3d2d4, 0xa00ae278, 0xbdbdf21c
 };
 
+// Function to update the CRC value byte-by-byte
 unsigned long crc_update(unsigned long crc, byte data) {
   byte tbl_idx;
   tbl_idx = crc ^ (data >> (0 * 4));
@@ -45,6 +51,7 @@ unsigned long crc_update(unsigned long crc, byte data) {
   return crc;
 }
 
+// Calculates the crc for a block of memory
 unsigned long crc_mem(const char *s, int n) {
   unsigned long crc = ~0L;
   for (int i = 0; i < n; i++)
@@ -53,20 +60,19 @@ unsigned long crc_mem(const char *s, int n) {
   return crc;
 }
 
-void
-setup()
+void setup()
 {
-//  WiFi.mode(WIFI_OFF);
-  reset_gpios();
+  reset_gpios(); // Ensure all pins start in a safe (INPUT) state
   Serial.begin(baudRate);
-  while (!Serial);
+  while (!Serial); // Wait for the serial port to initialize
   Serial.printf("Welcome to the BUSSide!\n");
-  usTicks = asm_ccount();
+  usTicks = asm_ccount(); // Calibrate internal cycle counter
 }
 
 uint32_t sequence_number = 1;
-uint8_t sync[] = "\xfe\xca";
+uint8_t sync[] = "\xfe\xca"; // Magic bytes: 0xFE 0xCA used to align the stream
 
+// Sets all pins to INPUT to avoid short circuits between operations
 void reset_gpios() {
   int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
   const char *gpioName[N_GPIO] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
@@ -76,30 +82,35 @@ void reset_gpios() {
   }
 }
 
+// Sends data back to the host PC with header, sequence, and CRC
 void send_reply(struct bs_request_s *request, struct bs_reply_s *reply) {
-  Serial.printf("send_reply start");
-  Serial.write(sync, 2);
+  Serial.printf("send_reply start"); 
+  Serial.write(sync, 2); // Send magic bytes first
   Serial.flush();
   reply->bs_sequence_number = request->bs_sequence_number;
-  reply->bs_checksum = 0;
+  reply->bs_checksum = 0; // Clear checksum before calculating it
   reply->bs_checksum = crc_mem((const char *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
+  
+  // Write the entire packet (Header + Payload) to Serial
   Serial.write((uint8_t *)reply, BS_HEADER_SIZE + reply->bs_payload_length);
   Serial.flush();
   Serial.printf("send_reply end");
 }
 
+// Clears any leftover garbage in the Serial buffer
 void FlushIncoming() {
   while (Serial.available() > 0) {
     (void)Serial.read();
   }
 }
 
+// Synchronization loop: Waits for the host to send the 0xFECA magic sequence
 void Sync() {
   pinMode(LED_BUILTIN, OUTPUT);
   unsigned long lastBlink = 0;
 
   while (1) {
-    yield();
+    yield(); // Prevent ESP8266 WDT reset
 
     //Blink LED every 2000ms to show we are alive and waiting
       if (millis() - lastBlink > 2000) {
@@ -109,18 +120,19 @@ void Sync() {
 
     if (Serial.available() > 0) {
       int ch = Serial.read();
-      if (ch == 0xfe) {
+      if (ch == 0xfe) { // Look for first magic byte
         Serial.println("DEBUG: Got FE");  // If you see this, the connection is alive!
         uint32_t start = millis();
         while (Serial.available() == 0 && (millis() - start < 100)) yield();
-        if (Serial.read() == 0xca) {
+        if (Serial.read() == 0xca) { // Look for second magic byte
           Serial.println("DEBUG: Synced!");
-          return;
+          return; // Successfully synced
         }
       }
     }
   }
 }
+
 
 void loop() {
   struct bs_frame_s header;
@@ -142,13 +154,14 @@ void loop() {
 
   // 3. Validate Payload Length (Safety Check)
   // ESP8266 has ~80KB RAM total; don't allow massive allocations
+  // Memory Safety: Prevent allocation of more than 32KB
   if (header.bs_payload_length > 32768) {
     // Serial.println("Err: Payload too large");
     FlushIncoming();
     return;
   }
 
-  // 4. Allocate memory on the HEAP
+  // 4. Allocate memory on the HEAP - changed to malloc
   request = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + header.bs_payload_length);
   if (request == NULL) {
     // Serial.println("Err: Malloc failed");
@@ -162,6 +175,8 @@ void loop() {
     rv = Serial.readBytes((char *)request->bs_payload, request->bs_payload_length);
     if (rv < (int)request->bs_payload_length) {
       // Serial.println("Err: Payload Timeout");
+      
+      // Free memory for request
       free(request);
       FlushIncoming();
       return;
@@ -186,7 +201,7 @@ void loop() {
   }
   sequence_number = request->bs_sequence_number;
 
-  // 8. Process Commands
+  // 8. Command Switchboard: Routes the request to the correct hardware protocol
   ESP.wdtFeed();  // Keep the watchdog happy before long operations
 
   switch (request->bs_command) {
@@ -211,20 +226,12 @@ void loop() {
   }
 
   // 9. Cleanup and Reply
-  reset_gpios();
+  // Response and Cleanup: Reset pins, send answer, and free allocated RAM  reset_gpios();
   if (reply != NULL) {
     send_reply(request, reply);
-    free(reply);
+    free(reply); // Release memory used for reply
   }
 
   free(request);  // Important: Free the malloc'd memory
   yield();        // Allow ESP8266 background tasks to run
 }
-
-// reset_gpios();
-// Serial.printf("GPIOS Reset");
-// send_reply(request, reply);
-// Serial.printf("Reply Sent");
-// free(reply);
-// Serial.printf("Free");
-//}

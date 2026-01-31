@@ -1,8 +1,9 @@
 #ifndef BUSSIDE_H
 #define BUSSIDE_H
 
-#define FREQ 160
-#define N_GPIO 9
+// --- Configuration Constants ---
+#define FREQ 160 
+#define N_GPIO 9 // The number of probe pins available (D0-D8)
 
 struct bs_frame_s {
   uint32_t bs_command;
@@ -13,7 +14,7 @@ struct bs_frame_s {
 };
 
 
-#define BS_HEADER_SIZE (4*4)
+#define BS_HEADER_SIZE (4*4) // Total size of the header in bytes (16)
 
 #define bs_request_s bs_frame_s
 #define bs_reply_s bs_frame_s
@@ -58,6 +59,8 @@ asm_ccount(void)
   return r;
 }
 
+// --- Command Definitions ---
+// These IDs tell the loop() switch-case which protocol function to run
 #define BS_ECHO                         0
 #define BS_REPLY_ECHO                   -1
 #define BS_SPI_FLASH_DUMP               1

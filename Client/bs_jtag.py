@@ -2,6 +2,7 @@
 
 import bs
 
+
 def jtag_discover_pinout():
     print("+++ Sending jtag pinout discovery command")
 
@@ -11,15 +12,15 @@ def jtag_discover_pinout():
     if rv is None:
         print("--- JTAG Discovery Timed Out")
         return None
-        
-    (bs_reply_length, bs_reply_args) = rv
-    
+
+    bs_reply_length, bs_reply_args = rv
+
     num_found = bs_reply_args[0]
     if num_found > 0:
         print(f"+++ {num_found} JTAG interface(s) FOUND")
-        
-        # JTAG results are usually grouped in sets of 5 (TCK, TMS, TDI, TDO, nTRST)
-        # Starting from index 1
+
+        # JTAG results are grouped in sets of 5: TCK, TMS, TDI, TDO, nTRST
+        # Values start from index 1
         for i in range(num_found):
             base = 1 + (i * 5)
             print(f"--- Interface #{i+1}:")
@@ -30,9 +31,10 @@ def jtag_discover_pinout():
             print(f"    nTRST: GPIO {bs_reply_args[base+4]}")
     else:
         print("--- No JTAG interfaces discovered.")
-        
+
     print("+++ SUCCESS")
     return (bs_reply_length, bs_reply_args)
+
 
 def doCommand(command):
     # .startswith is cleaner and more 'Pythonic' than .find() == 0

@@ -2,6 +2,9 @@
 #include <Wire.h>
 
 struct bs_frame_s*
+// ... variable declarations ...
+  
+// 1. EXTRACT ARGUMENTS: The PC sends 32-bit integers in the payload
 read_I2C_eeprom(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
@@ -14,35 +17,40 @@ read_I2C_eeprom(struct bs_request_s *request)
   int addressLength;
   
   request_args = (uint32_t *)&request->bs_payload[0];
-  slaveAddress = request_args[0];
-  readsize = request_args[1];
-  skipsize = request_args[2];
-  sdaPin = request_args[3] - 1;
+  slaveAddress = request_args[0]; // I2C 7-bit address
+  readsize = request_args[1]; // Total bytes to read
+  skipsize = request_args[2]; // Starting memory address offset
+  sdaPin = request_args[3] - 1; // Map human-friendly pin to array index
   sclPin = request_args[4] - 1;
-  addressLength = request_args[5];
+  addressLength = request_args[5]; // 1 or 2 bytes for memory addressing
 
+  // 2. ALLOCATE REPLY: Space for header + the requested data
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + readsize);
   if (reply == NULL)
     return NULL;
 
+  // 2. ALLOCATE REPLY: Space for header + the requested data
   reply->bs_command = BS_REPLY_I2C_FLASH_DUMP;
   reply_data = (uint8_t *)&reply->bs_payload[0];
-  
+
+  // 4. SET MEMORY POINTER: Tell where we want to start reading
   Wire.begin(gpioIndex[sdaPin], gpioIndex[sclPin]);  
   
   Wire.beginTransmission(slaveAddress);
   switch (addressLength) {
-    case 2:
+    case 2: // For larger EEPROMs (e.g., 24C64+) requiring 16-bit addresses
       Wire.write((skipsize & 0xff00) >> 8); // send the high byte of the EEPROM memory address
-    case 1:
+    case 1: // For smaller EEPROMs (e.g., 24C02) requiring 8-bit addresses
       Wire.write((skipsize & 0x00ff)); // send the low byte
       break;
     default:
       free(reply);
       return NULL;
   }
-  Wire.endTransmission(); 
+  Wire.endTransmission(); // Execute the pointer set
 
+  // 5. BULK READ: Request data in small chunks (8 bytes at a time)
+  // This helps avoid overflowing the small internal Wire buffer (32 bytes)
   i = 0;
   while (readsize > 0) {
     uint32_t gotRead;

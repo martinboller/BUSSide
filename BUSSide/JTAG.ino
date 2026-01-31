@@ -25,7 +25,7 @@
 
 // Pattern used for scan() and loopback() tests
 #define PATTERN_LEN              64
-// Use something random when trying find JTAG lines:
+// Use something random when trying find JTAG lines that is, A random pattern used to detect if TDI is connected to TDO via a shift register
 char mypattern[PATTERN_LEN] = "011001110100110110100001011100100101100111010011010101011010101";
 // Use something more determinate when trying to find
 // length of the DR register:
@@ -50,14 +50,17 @@ char mypattern[PATTERN_LEN] = "0110011101001101101000010111001001011001110100110
  */
 
 
-
-// TAP TMS states we care to use. NOTE: MSB sent first
-// Meaning ALL TAP and IR codes have their leftmost
-// bit sent first. This might be the reverse of what
-// documentation for your target(s) show.
-#define TAP_RESET                "11111"       // looping 1 will return 
-                                               // IDCODE if reg available
-#define TAP_SHIFTDR              "111110100"
+/**
+ * TAP TMS states we care to use. NOTE: MSB sent first
+ * Meaning ALL TAP and IR codes have their leftmost
+ * bit sent first. This might be the reverse of what
+ * documentation for your target(s) show.
+ * TAP TMS State Transitions
+ * To navigate the JTAG state machine, we toggle the TMS pin while pulsing TCK.
+ * These strings represent the bit sequences required to reach specific states.
+ */
+#define TAP_RESET                "11111" // 5 high bits always returns the TAP to 'Test-Logic-Reset' - looping 1 will return IDCODE if reg available
+#define TAP_SHIFTDR              "111110100" // Navigates from any state to 'Shift-DR' (Data Register)
 #define TAP_SHIFTIR              "1111101100" // -11111> Reset -0> Idle -1> SelectDR
                                               // -1> SelectIR -0> CaptureIR -0> ShiftIR
 
