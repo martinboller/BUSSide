@@ -66,6 +66,16 @@ def printHelp():
 
 
 def doCommand(command):
+    # Perform initial sync with NodeMCU before any command
+    print("+++ Syncing with BUSSide before command execution...")
+    bs.FlushInput()
+    bs.NewTimeout(30)
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     if command.find("spi ") == 0:
         return bs_spi.doCommand(command[4:])
     elif command.find("i2c ") == 0:

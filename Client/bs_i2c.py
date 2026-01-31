@@ -8,14 +8,6 @@ WRITEBLOCKSIZE = 512
 
 
 def i2c_discover_slaves(sda, scl):
-    print("+++ Syncing with BUSSide before I2C slave discovery...")
-    # Quick sync check with echo command
-    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
-    if sync_result is None:
-        print("--- Sync failed - device not responsive")
-        return None
-    print("+++ Device synced successfully")
-    
     print("+++ Sending i2c slave discovery command")
     request_args = [sda, scl]
     rv = bs.requestreply(5, request_args)
@@ -33,14 +25,6 @@ def i2c_discover_slaves(sda, scl):
 
 
 def i2c_discover():
-    print("+++ Syncing with BUSSide before I2C discovery...")
-    # Quick sync check with echo command
-    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
-    if sync_result is None:
-        print("--- Sync failed - device not responsive")
-        return None
-    print("+++ Device synced successfully")
-    
     print("+++ Sending i2c discover pinout command")
     request_args = []
     bs.NewTimeout(30)  # Reduced timeout now that scanning is optimized

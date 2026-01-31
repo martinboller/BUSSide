@@ -18,15 +18,6 @@ def uart_data_discover():
 
     Returns `(length, args)` on success or `None` on failure.
     """
-    print("+++ Syncing with BUSSide before UART data discovery...")
-    bs.NewTimeout(30)  # Increase timeout for sync check
-    # Quick sync check with echo command
-    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
-    if sync_result is None:
-        print("--- Sync failed - device not responsive")
-        return None
-    print("+++ Device synced successfully")
-    
     print("+++ Sending UART data discovery command")
     request_args = []
     bs.NewTimeout(60)
@@ -61,15 +52,6 @@ def uart_tx(rxpin, baudrate):
 
 
 def uart_rx():
-    print("+++ Syncing with BUSSide before UART RX discovery...")
-    bs.NewTimeout(30)  # Increase timeout for sync check
-    # Quick sync check with echo command
-    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
-    if sync_result is None:
-        print("--- Sync failed - device not responsive")
-        return None
-    print("+++ Device synced successfully")
-    
     print("+++ Sending UART discovery rx command")
     request_args = []
     bs.NewTimeout(120)
