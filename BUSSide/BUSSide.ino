@@ -97,6 +97,30 @@ void send_reply(struct bs_request_s *request, struct bs_reply_s *reply) {
   Serial.printf("send_reply end");
 }
 
+// Global variables for LED blinking
+unsigned long lastBlink = 0;
+unsigned long blinkInterval = 0; // 0 means no blinking
+
+// LED blink control function
+struct bs_frame_s *led_blink(struct bs_request_s *request) {
+  // Payload should contain one uint32_t: blink interval in milliseconds
+  // 0 = stop blinking
+  if (request->bs_payload_length >= 4) {
+    blinkInterval = request->bs_payload[0];
+    if (blinkInterval == 0) {
+      digitalWrite(LED_BUILTIN, LOW); // Turn off LED when stopping
+    }
+  }
+  
+  // Create a simple reply
+  struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
+  if (reply) {
+    reply->bs_command = BS_REPLY_LED_BLINK;
+    reply->bs_payload_length = 0;
+  }
+  return reply;
+}
+
 // Clears any leftover garbage in the Serial buffer
 void FlushIncoming() {
   while (Serial.available() > 0) {
@@ -111,13 +135,7 @@ void Sync() {
 
   while (1) {
     yield(); // Prevent ESP8266 WDT reset
-
-    //Blink LED every 2000ms to show we are alive and waiting
-      if (millis() - lastBlink > 2000) {
-       digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-       lastBlink = millis();
-    }
-
+  
     if (Serial.available() > 0) {
       int ch = Serial.read();
       if (ch == 0xfe) { // Look for first magic byte
@@ -142,6 +160,9 @@ void loop() {
 
   // 1. Wait for the sync sequence
   Sync();
+
+  // Initialize LED for blinking
+  pinMode(LED_BUILTIN, OUTPUT);
 
   // 2. Read the header
   Serial.setTimeout(1000);
@@ -219,6 +240,7 @@ void loop() {
         reply->bs_command = BS_REPLY_ECHO;
       }
       break;
+    case BS_LED_BLINK: reply = led_blink(request); break;
     // ... Add other cases as needed ...
     default:
       reply = NULL;
@@ -233,5 +255,12 @@ void loop() {
   }
 
   free(request);  // Important: Free the malloc'd memory
+  
+  // Handle LED blinking
+  if (blinkInterval > 0 && millis() - lastBlink > blinkInterval) {
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    lastBlink = millis();
+  }
+  
   yield();        // Allow ESP8266 background tasks to run
 }

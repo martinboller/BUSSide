@@ -1,9 +1,16 @@
 import serial
 import time
+import bs
 
 # 1. Match the speed exactly
 BAUD = 115200
 ser = serial.Serial("/dev/ttyUSB0", BAUD, timeout=1, dsrdtr=False, rtscts=False)
+
+# Connect to BUSSide
+bs.Connect("/dev/ttyUSB0")
+bs.set_led_blink(6000)  # 6 seconds for pulse test
+
+# 2. Wait for the 'Welcome' garbage to finish
 
 # 2. Wait for the 'Welcome' garbage to finish
 print("Waiting for board to stabilize...")

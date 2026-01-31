@@ -44,6 +44,7 @@ struct bs_frame_s *erase_sector_SPI_flash(struct bs_request_s *request);
 struct bs_frame_s *spi_discover(struct bs_request_s *request);
 struct bs_frame_s *spi_read_id_bb(struct bs_request_s *request);
 struct bs_frame_s *read_SPI_flash_bitbang(struct bs_request_s *request);
+struct bs_frame_s *led_blink(struct bs_request_s *request);
 
 extern byte pins[];
 extern const char *pinnames[];
@@ -107,6 +108,8 @@ asm_ccount(void)
 #define BS_REPLY_SPI_ENABLE_WP          42
 #define BS_SPI_FAST_SEND                43
 #define BS_REPLY_SPI_FAST_SEND          44
+#define BS_LED_BLINK                    45
+#define BS_REPLY_LED_BLINK              46
 
 
 #endif

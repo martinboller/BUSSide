@@ -394,3 +394,15 @@ def Connect(device, ltimeout=2, nretries=10):
             print(f"--- Connection Error: {e}")
             pass
     return None
+
+
+def set_led_blink(interval_ms):
+    """Set LED blink interval in milliseconds. 0 to stop blinking."""
+    # print(f"+++ Setting LED blink interval to {interval_ms}ms")
+    request_args = [interval_ms]
+    rv = requestreply(45, request_args)  # BS_LED_BLINK = 45
+    if rv is None:
+        return None
+    (bs_reply_length, bs_reply_args) = rv
+    # print("+++ LED blink command sent")
+    return (bs_reply_length, bs_reply_args)

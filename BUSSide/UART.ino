@@ -388,11 +388,6 @@ UART_passthrough(struct bs_request_s *request)
   int rxpin, txpin;
   int baudrate;
   unsigned long lastBlink = 0;
-   //Blink LED every 500ms to show we are alive and waiting
-      if (millis() - lastBlink > 500) {
-       digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-       lastBlink = millis();
-    }
   request_args = (uint32_t *)&request->bs_payload[0];
   rxpin = request_args[0];
   txpin = request_args[1];
@@ -402,6 +397,19 @@ UART_passthrough(struct bs_request_s *request)
   while (1) {
     ESP.wdtFeed();
     
+    // Check for sync bytes to exit passthrough
+    if (Serial.available() >= 2) {
+      int ch1 = Serial.peek();
+      if (ch1 == 0xFE) {
+        Serial.read(); // consume the first byte
+        int ch2 = Serial.read();
+        if (ch2 == 0xCA) {
+          // Received sync bytes, exit passthrough
+          break;
+        }
+      }
+    }
+    
     while (ser.available() > 0) {
       Serial.write(ser.read());
       yield();
@@ -410,6 +418,12 @@ UART_passthrough(struct bs_request_s *request)
     while (Serial.available() > 0) {
       ser.write(Serial.read());
       yield();
+    }
+    
+    // Update LED blink
+    if (millis() - lastBlink > 500) {
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      lastBlink = millis();
     }
   }
   return NULL;

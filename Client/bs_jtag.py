@@ -4,6 +4,14 @@ import bs
 
 
 def jtag_discover_pinout():
+    print("+++ Syncing with BUSSide before JTAG discovery...")
+    # Quick sync check with echo command
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     print("+++ Sending jtag pinout discovery command")
 
     request_args = []

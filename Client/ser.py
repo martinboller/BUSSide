@@ -1,8 +1,15 @@
 import serial
 import time
+import bs
 
 # Use a low baud rate for the "Acid Test"
 BAUD = 115200
+
+# Connect to BUSSide first
+bs.Connect("/dev/ttyUSB0")
+bs.set_led_blink(7000)  # 7 seconds for serial test
+
+# Open the port but DON'T initialize yet
 
 # Open the port but DON'T initialize yet
 ser = serial.Serial()

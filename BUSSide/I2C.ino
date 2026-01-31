@@ -160,21 +160,7 @@ I2C_active_scan1(struct bs_request_s *request, struct bs_reply_s *reply, int sda
   if (numberOfSlaves > 0) {
     int index;
     
-    for (int i = 0; i < 10; i++)  {
-      int slaveCount;
-
-      slaveCount = 0;
-      for (int slaveAddress = 0; slaveAddress < 128; slaveAddress++) {
-        ESP.wdtFeed();
-        Wire.beginTransmission(slaveAddress);
-        if (Wire.endTransmission() == 0) { // if (no errors)
-          slaveCount++;
-        }
-      }
-      if (slaveCount != numberOfSlaves) {
-        return;
-      }
-    } 
+    // Simplified: Skip the 10 verification scans for faster discovery
     index = reply->bs_payload_length / 8;
     reply_data = (uint32_t *)&reply->bs_payload[0];
     reply_data[2*index + 0] = sdaPin + 1;

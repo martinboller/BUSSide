@@ -348,21 +348,22 @@ scan(int *tck_pin, int *tms_pin, int *tdi_pin, int *tdo_pin, int *ntrst_pin)
   int retVal = 0;
 
 //  Serial.println(pattern);
-  for(ntrst=0;ntrst<pinslen;ntrst++) {
+  const int MAX_PIN = 8; // Limit to pins 0-7 for faster discovery
+  for(ntrst=0;ntrst<MAX_PIN;ntrst++) {
     ESP.wdtFeed();
-    for(tck=0;tck<pinslen;tck++) {
+    for(tck=0;tck<MAX_PIN;tck++) {
       ESP.wdtFeed();
       if(tck == ntrst) continue;
-      for(tms=0;tms<pinslen;tms++) {
+      for(tms=0;tms<MAX_PIN;tms++) {
         ESP.wdtFeed();
         if(tms == ntrst) continue;
         if(tms == tck  ) continue;
-        for(tdo=0;tdo<pinslen;tdo++) {
+        for(tdo=0;tdo<MAX_PIN;tdo++) {
           ESP.wdtFeed();
           if(tdo == ntrst) continue;
           if(tdo == tck  ) continue;
           if(tdo == tms  ) continue;
-          for(tdi=0;tdi<pinslen;tdi++) {
+          for(tdi=0;tdi<MAX_PIN;tdi++) {
             ESP.wdtFeed();
             if(tdi == ntrst) continue;
             if(tdi == tck  ) continue;

@@ -43,6 +43,14 @@ def spi_dump_flash(dumpsize, outfile):
 
 
 def spi_read_id():
+    print("+++ Syncing with BUSSide before SPI read ID...")
+    # Quick sync check with echo command
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     print("+++ Sending SPI read ID command")
     request_args = [1000000]
     rv = bs.requestreply(17, request_args)
@@ -134,6 +142,14 @@ def spi_fuzz(cs, clk, mosi, miso):
 
 
 def spi_discover_pinout():
+    print("+++ Syncing with BUSSide before SPI discovery...")
+    # Quick sync check with echo command
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     print("+++ Sending spi discover pinout command")
     request_args = [1000000]
     bs.NewTimeout(60)

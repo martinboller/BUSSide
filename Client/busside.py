@@ -25,6 +25,7 @@ device = sys.argv[1]
 def printHelp():
     print("+++ The BUSSide accepts the following commands")
     print("+++")
+    print("SPI Commands:")
     print("+++ > spi discover pinout")
     print("+++ > spi send default <cmdbyte1> ....")
     print("+++ > spi send <cs> <clk> <mosi> <miso> <cmdbyte1> ....")
@@ -37,6 +38,8 @@ def printHelp():
     print("+++ > spi flash read sreg2 [<cs> <clk> <mosi> <miso>]")
     print("+++ > spi flash dump <size> <outfile>")
     print("+++ > spi flash write <size> <infile>")
+    print("+++")
+    print("I2C Commands:")
     print("+++ > i2c discover pinout")
     print("+++ > i2c discover slaves <sdaPin> <sclPin>")
     print(
@@ -45,14 +48,20 @@ def printHelp():
     print(
         "+++ > i2c flash write <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <infile>"
     )
+    print("+++")
+    print("JTAG Commands:")
     print("+++ > jtag discover pinout")
+    print("+++")
+    print("UART Commands:")
     print("+++ > uart discover data")
     print("+++ > uart passthrough auto")
     print("+++ > uart discover rx")
     print("+++ > uart discover tx <rx_gpio> <baudrate>")
     print("+++ > uart passthrough <rx_gpio> <tx_gpio> <baudrate>")
-    print("+++ > help")
-    print("+++ > quit")
+    print("+++")
+    print("Other Commands:")
+    print("+++ > help - Print this help message")
+    print("+++ > quit - quits the BUSSide program")
     print("+++")
 
 
@@ -87,12 +96,12 @@ if rv is None:
     print("--- Plug it in again. Then restart the software.")
     sys.exit(1)
 
-print("+++")
+# print("+++")
 print("+++ Welcome to the BUSSide")
-print("+++ By Dr Silvio Cesare of InfoSect")
-print("+++")
+# print("+++ By Dr Silvio Cesare of InfoSect")
+# print("+++")
 printHelp()
-print("+++")
+# print("+++")
 
 while True:
     try:
@@ -117,6 +126,10 @@ while True:
     if rv is None:
         printHelp()
     elif rv == -1:
-        break
+        # Exit cleanly without trying to communicate with BUSSide
+        print("Ciao!")
+        sys.exit(0)
 
+# Turn off LED blinking when exiting normally (not quit)
+bs.set_led_blink(0)
 print("Ciao!")

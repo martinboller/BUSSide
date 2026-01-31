@@ -18,6 +18,15 @@ def uart_data_discover():
 
     Returns `(length, args)` on success or `None` on failure.
     """
+    print("+++ Syncing with BUSSide before UART data discovery...")
+    bs.NewTimeout(30)  # Increase timeout for sync check
+    # Quick sync check with echo command
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     print("+++ Sending UART data discovery command")
     request_args = []
     bs.NewTimeout(60)
@@ -52,6 +61,15 @@ def uart_tx(rxpin, baudrate):
 
 
 def uart_rx():
+    print("+++ Syncing with BUSSide before UART RX discovery...")
+    bs.NewTimeout(30)  # Increase timeout for sync check
+    # Quick sync check with echo command
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+    if sync_result is None:
+        print("--- Sync failed - device not responsive")
+        return None
+    print("+++ Device synced successfully")
+    
     print("+++ Sending UART discovery rx command")
     request_args = []
     bs.NewTimeout(120)
@@ -117,7 +135,11 @@ def uart_passthrough(gpiorx, gpiotx, baudrate):
         print("\n+++ Passthrough terminated by user.")
     finally:
         bs.keys_cleanup()
-        # IMPORTANT: You must reset the NodeMCU hardware now!
+        # Send sync bytes to exit passthrough mode
+        print("+++ Sending sync bytes to exit passthrough...")
+        ser.write(b'\xfe\xca')
+        time.sleep(0.1)  # Give time for the firmware to process
+        print("+++ Passthrough exited cleanly.")
 
 
 def uart_passthrough_auto():

@@ -205,18 +205,19 @@ spi_discover(struct bs_request_s *request)
   if (reply == NULL)
     return NULL;
 
-  reply_data = (uint32_t *)&reply->bs_payload[0];
   index = 0;
-  for (int cs = 0; cs < N_GPIO; cs++) {
-    for (int clk = 0; clk < N_GPIO; clk++) {
+  // Optimize SPI discovery by limiting pin range to speed up scanning
+  const int MAX_PIN = 8; // Limit to pins 0-7 for faster discovery
+  for (int cs = 0; cs < MAX_PIN; cs++) {
+    for (int clk = 0; clk < MAX_PIN; clk++) {
       if (clk == cs)
         continue;
-      for (int mosi = 0; mosi < N_GPIO; mosi++) {       
+      for (int mosi = 0; mosi < MAX_PIN; mosi++) {       
         if (mosi == clk)
           continue;
         if (mosi == cs)
           continue;
-        for (int miso = 0; miso < N_GPIO; miso++) {
+        for (int miso = 0; miso < MAX_PIN; miso++) {
           uint8_t cmd[4] = { 0x9f, 0x00, 000, 0x00 }; 
           uint8_t v[4];
                  
