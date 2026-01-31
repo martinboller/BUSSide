@@ -1,13 +1,31 @@
 #!/usr/bin/env python3
 
+"""
+BUSSide SPI Client Script
+
+This script provides functions to interact with SPI devices using the BUSSide hardware.
+It supports discovering SPI pinouts, reading/writing flash memory, fuzzing commands,
+and various SPI operations like reading IDs, status registers, and unique IDs.
+"""
+
 import bs
 import struct
 
-BLOCKSIZE = 1024
-WRITEBLOCKSIZE = 256
+BLOCKSIZE = 1024  # Block size for dumping data in bytes
+WRITEBLOCKSIZE = 256  # Block size for writing data in bytes
 
 
 def dumpSPI(size, skip):
+    """
+    Dump data from SPI device.
+
+    Args:
+        size (int): Size of data to dump in bytes.
+        skip (int): Offset to start dumping from.
+
+    Returns:
+        bytes: The dumped data, or None if failed.
+    """
     request_args = [size, skip, 1000000]
     rv = bs.requestreply(1, request_args)
     if rv is None:
@@ -21,6 +39,16 @@ def dumpSPI(size, skip):
 
 
 def spi_dump_flash(dumpsize, outfile):
+    """
+    Dump SPI flash memory to a file.
+
+    Args:
+        dumpsize (int): Total size to dump in bytes.
+        outfile (str): Output file path.
+
+    Returns:
+        tuple or None: (1, 1) on success, None on failure.
+    """
     bs.NewTimeout(5)
     skip = 0
     print("+++ Dumping SPI")
@@ -43,6 +71,12 @@ def spi_dump_flash(dumpsize, outfile):
 
 
 def spi_read_id():
+    """
+    Read SPI device ID.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI read ID command")
     request_args = [1000000]
     rv = bs.requestreply(17, request_args)
@@ -58,6 +92,17 @@ def spi_read_id():
 
 
 def writeSPI(size, skipsize, data):
+    """
+    Write data to SPI device.
+
+    Args:
+        size (int): Size of data to write in bytes.
+        skipsize (int): Offset to start writing at.
+        data (list): List of uint32 words to write.
+
+    Returns:
+        tuple: Reply from the BUSSide device.
+    """
     # Python 3: Ensure integer division for range
     num_data_ints = size // 4
     request_args = [0] * (3 + num_data_ints)
@@ -71,6 +116,16 @@ def writeSPI(size, skipsize, data):
 
 
 def spi_flash(dumpsize, infile):
+    """
+    Write data from a file to SPI flash memory.
+
+    Args:
+        dumpsize (int): Total size to write in bytes.
+        infile (str): Input file path.
+
+    Returns:
+        tuple or None: (1, 1) on success, None on failure.
+    """
     bs.NewTimeout(5)
     skip = 0
     print("+++ Writing SPI")
@@ -105,6 +160,18 @@ def spi_flash(dumpsize, infile):
 
 
 def spi_fuzz(cs, clk, mosi, miso):
+    """
+    Fuzz SPI commands to discover valid ones.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending spi fuzz command")
     request_args = [1000000, cs, clk, mosi, miso]
     bs.NewTimeout(60)
@@ -134,6 +201,12 @@ def spi_fuzz(cs, clk, mosi, miso):
 
 
 def spi_discover_pinout():
+    """
+    Discover available SPI interfaces (pinouts) on the BUSSide device.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending spi discover pinout command")
     request_args = [1000000]
     bs.NewTimeout(60)
@@ -159,6 +232,18 @@ def spi_discover_pinout():
 
 
 def spi_streg1(cs, clk, mosi, miso):
+    """
+    Read SPI status register 1.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI command")
     request_args = [1000000, cs, clk, mosi, miso, 2, 0x05, 0x00]
     rv = bs.requestreply(3, request_args)
@@ -172,6 +257,18 @@ def spi_streg1(cs, clk, mosi, miso):
 
 
 def spi_streg2(cs, clk, mosi, miso):
+    """
+    Read SPI status register 2.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI command")
     request_args = [1000000, cs, clk, mosi, miso, 2, 0x35, 0x00]
     rv = bs.requestreply(3, request_args)
@@ -185,6 +282,18 @@ def spi_streg2(cs, clk, mosi, miso):
 
 
 def spi_readuid(cs, clk, mosi, miso):
+    """
+    Read SPI unique ID.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Syncing with BUSSide before SPI read UID...")
     bs.NewTimeout(30)  # Increase timeout for sync check
     # Quick sync check with echo command
@@ -227,6 +336,19 @@ def spi_readuid(cs, clk, mosi, miso):
 
 
 def doSendCommand(cs, clk, mosi, miso, args):
+    """
+    Send a custom SPI command.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+        args (list): List of command arguments as strings.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI command")
     n = len(args)
     # Correctly initialize list with integers
@@ -256,6 +378,18 @@ def doSendCommand(cs, clk, mosi, miso, args):
 
 
 def spi_wp_enable(cs, clk, mosi, miso):
+    """
+    Enable SPI write protection.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI write protect commands")
     request_args = [1000000, cs, clk, mosi, miso]
     rv = bs.requestreply(41, request_args)
@@ -267,6 +401,18 @@ def spi_wp_enable(cs, clk, mosi, miso):
 
 
 def spi_wp_disable(cs, clk, mosi, miso):
+    """
+    Disable SPI write protection.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI write protect commands")
     request_args = [1000000, cs, clk, mosi, miso]
     rv = bs.requestreply(39, request_args)
@@ -278,6 +424,18 @@ def spi_wp_disable(cs, clk, mosi, miso):
 
 
 def spi_bb_read_id(cs, clk, mosi, miso):
+    """
+    Read SPI device ID using bit-banging.
+
+    Args:
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI read ID command")
     request_args = [1000000, cs, clk, mosi, miso]
     rv = bs.requestreply(31, request_args)
@@ -293,6 +451,19 @@ def spi_bb_read_id(cs, clk, mosi, miso):
 
 
 def spi_erase_sector(skipsize, cs, clk, mosi, miso):
+    """
+    Erase a sector in SPI flash memory.
+
+    Args:
+        skipsize (int): Sector address to erase.
+        cs (int): Chip select GPIO pin.
+        clk (int): Clock GPIO pin.
+        mosi (int): MOSI GPIO pin.
+        miso (int): MISO GPIO pin.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending SPI erase sector command")
     request_args = [1000000, skipsize, cs, clk, mosi, miso]
     rv = bs.requestreply(27, request_args)
@@ -304,6 +475,15 @@ def spi_erase_sector(skipsize, cs, clk, mosi, miso):
 
 
 def doFlashCommand(command):
+    """
+    Handle flash-related SPI commands.
+
+    Args:
+        command (str): The flash command string.
+
+    Returns:
+        int or None: 0 on success, None on invalid command.
+    """
     if command.find("read id") == 0:
         args = command[7:].split()
         if len(args) == 0:
@@ -386,6 +566,15 @@ def doFlashCommand(command):
 
 
 def doCommand(command):
+    """
+    Main command dispatcher for SPI operations.
+
+    Args:
+        command (str): The command string to execute.
+
+    Returns:
+        int or None: 0 on success, None on invalid command.
+    """
     if command.find("flash ") == 0:
         doFlashCommand(command[6:])
         return 0

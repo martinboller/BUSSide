@@ -1,9 +1,22 @@
 #!/usr/bin/env python3
 
+"""
+BUSSide JTAG Client Script
+
+This script provides functions to interact with JTAG devices using the BUSSide hardware.
+It supports discovering JTAG pinouts.
+"""
+
 import bs
 
 
 def jtag_discover_pinout():
+    """
+    Discover available JTAG interfaces (pinouts) on the BUSSide device.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if timed out.
+    """
     print("+++ Sending jtag pinout discovery command")
 
     request_args = []
@@ -37,6 +50,15 @@ def jtag_discover_pinout():
 
 
 def doCommand(command):
+    """
+    Main command dispatcher for JTAG operations.
+
+    Args:
+        command (str): The command string to execute.
+
+    Returns:
+        int or None: 0 on success, None on invalid command.
+    """
     # .startswith is cleaner and more 'Pythonic' than .find() == 0
     if command.strip() == "discover pinout":
         jtag_discover_pinout()

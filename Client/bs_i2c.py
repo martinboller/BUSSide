@@ -1,13 +1,30 @@
 #!/usr/bin/env python3
 
+"""
+BUSSide I2C Client Script
+
+This script provides functions to interact with I2C devices using the BUSSide hardware.
+It supports discovering I2C slaves, dumping and writing flash memory over I2C.
+"""
+
 import bs
 import struct
 
-BLOCKSIZE = 1024
-WRITEBLOCKSIZE = 512
+BLOCKSIZE = 1024  # Block size for dumping data in bytes
+WRITEBLOCKSIZE = 512  # Block size for writing data in bytes
 
 
 def i2c_discover_slaves(sda, scl):
+    """
+    Discover I2C slave devices on the specified SDA and SCL pins.
+
+    Args:
+        sda (int): GPIO pin number for SDA.
+        scl (int): GPIO pin number for SCL.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending i2c slave discovery command")
     request_args = [sda, scl]
     rv = bs.requestreply(5, request_args)
@@ -25,6 +42,12 @@ def i2c_discover_slaves(sda, scl):
 
 
 def i2c_discover():
+    """
+    Discover available I2C interfaces (pinouts) on the BUSSide device.
+
+    Returns:
+        tuple: (reply_length, reply_args) or None if failed.
+    """
     print("+++ Sending i2c discover pinout command")
     request_args = []
     bs.NewTimeout(30)  # Reduced timeout now that scanning is optimized
@@ -47,6 +70,15 @@ def i2c_discover():
 
 
 def doFlashCommand(command):
+    """
+    Handle flash-related commands for I2C devices.
+
+    Args:
+        command (str): The flash command string.
+
+    Returns:
+        int or None: 0 on success, None on invalid command.
+    """
     if command.find("dump ") == 0:
         args = command[5:].split()
         if len(args) != 6:
@@ -78,6 +110,15 @@ def doFlashCommand(command):
 
 
 def doCommand(command):
+    """
+    Main command dispatcher for I2C operations.
+
+    Args:
+        command (str): The command string to execute.
+
+    Returns:
+        int or None: 0 on success, None on invalid command.
+    """
     if command.find("flash ") == 0:
         doFlashCommand(command[6:])
         return 0
@@ -95,6 +136,21 @@ def doCommand(command):
 
 
 def writeI2C(sda, scl, slave, size, skip, alen, data):
+    """
+    Write data to an I2C slave device.
+
+    Args:
+        sda (int): GPIO pin for SDA.
+        scl (int): GPIO pin for SCL.
+        slave (int): I2C slave address.
+        size (int): Size of data to write in bytes.
+        skip (int): Offset to start writing at.
+        alen (int): Address length.
+        data (list): List of uint32 words to write.
+
+    Returns:
+        tuple: Reply from the BUSSide device.
+    """
     # Preallocate a list of integers for the request arguments
     num_words = size // 4
     request_args = [0] * (6 + num_words)
@@ -111,6 +167,20 @@ def writeI2C(sda, scl, slave, size, skip, alen, data):
 
 
 def dumpI2C(sda, scl, slave, size, skip, alen):
+    """
+    Dump data from an I2C slave device.
+
+    Args:
+        sda (int): GPIO pin for SDA.
+        scl (int): GPIO pin for SCL.
+        slave (int): I2C slave address.
+        size (int): Size of data to dump in bytes.
+        skip (int): Offset to start dumping from.
+        alen (int): Address length.
+
+    Returns:
+        bytes: The dumped data, or None if failed.
+    """
     data = b""
     request_args = [slave, size, skip, sda, scl, alen]
     rv = bs.requestreply(9, request_args)
@@ -124,6 +194,20 @@ def dumpI2C(sda, scl, slave, size, skip, alen):
 
 
 def i2c_dump_flash(sda, scl, slave, alen, dumpsize, outfile):
+    """
+    Dump flash memory from an I2C device to a file.
+
+    Args:
+        sda (int): GPIO pin for SDA.
+        scl (int): GPIO pin for SCL.
+        slave (int): I2C slave address.
+        alen (int): Address length.
+        dumpsize (int): Total size to dump in bytes.
+        outfile (str): Output file path.
+
+    Returns:
+        tuple or None: (1, 1) on success, None on failure.
+    """
     skip = 0
     print("+++ Dumping I2C")
     with open(outfile, "wb") as f:
@@ -146,6 +230,20 @@ def i2c_dump_flash(sda, scl, slave, alen, dumpsize, outfile):
 
 
 def i2c_write_flash(sda, scl, slave, alen, dumpsize, infile):
+    """
+    Write data from a file to flash memory on an I2C device.
+
+    Args:
+        sda (int): GPIO pin for SDA.
+        scl (int): GPIO pin for SCL.
+        slave (int): I2C slave address.
+        alen (int): Address length.
+        dumpsize (int): Total size to write in bytes.
+        infile (str): Input file path.
+
+    Returns:
+        tuple or None: (1, 1) on success, None on failure.
+    """
     bs.NewTimeout(5)
     skip = 0
     print("+++ Writing I2C")
