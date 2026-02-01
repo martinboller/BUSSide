@@ -156,7 +156,6 @@ def doCommand(command):
     # STEP 1: Check for exit immediately
     # This prevents the print() and the hardware sync from ever running
     if command.strip().lower() in ["quit", "exit"]:
-        print("Cleaning up and exiting...")
         return -1
 
     # STEP 2: Now that we know it's a real command, perform sync
@@ -230,7 +229,6 @@ while True:
         continue 
     except EOFError:
         # User hit Ctrl+D
-        print("\nExiting...")
         break
     except Exception:
         print("\n--- ERROR: Unexpected Exception:")
