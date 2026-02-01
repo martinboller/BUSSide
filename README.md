@@ -29,7 +29,7 @@ BUSSide is designed to interface with various hardware buses to assist in device
 | **UART** | Automated baud rate detection and interactive shell access. |
 | **SPI** | Flash dumping, peripheral interaction, and sniffing. |
 | **I2C** | Device address scanning and EEPROM data extraction. |
-| **JTAG** | TAP identification and boundary scan operations. |
+| **JTAG** | Pin Discovery. |
 
 ---
 
