@@ -2,6 +2,8 @@
 
 import os
 import sys
+
+from click import command
 # Ensure the Client/ directory is on sys.path when running from repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "Client"))
 
@@ -66,16 +68,22 @@ def printHelp():
 
 
 def doCommand(command):
-    # Perform initial sync with NodeMCU before any command
+    # STEP 1: Check for exit immediately
+    # This prevents the print() and the hardware sync from ever running
+    if command.strip().lower() in ["quit", "exit"]:
+        print("Cleaning up and exiting...")
+        return -1
+
+    # STEP 2: Now that we know it's a real command, perform sync
     print("+++ Syncing with BUSSide before command execution...")
     bs.FlushInput()
     bs.NewTimeout(30)
-    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
+   
+    sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO
     if sync_result is None:
-        #print("--- Sync failed - device not responsive")
         return None
-    #print("+++ Device synced successfully")
     
+    # STEP 3: Route to sub-modules
     if command.find("spi ") == 0:
         return bs_spi.doCommand(command[4:])
     elif command.find("i2c ") == 0:
@@ -84,11 +92,8 @@ def doCommand(command):
         return bs_uart.doCommand(command[5:])
     elif command.find("jtag ") == 0:
         return bs_jtag.doCommand(command[5:])
-    elif command == "quit":
-        return -1
     else:
         return None
-
 
 try:
     with open("/tmp/BUSSide.seq", "rb") as f:

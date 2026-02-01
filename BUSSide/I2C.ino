@@ -71,7 +71,8 @@ write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength
     Wire.beginTransmission(slaveAddress);
     switch (addressLength) {
       case 2:
-        Wire.write((skipsize & 0xff00) >> 8); 
+        // High byte first
+        Wire.write((uint8_t)((skipsize >> 8) & 0xFF));
       case 1:
         Wire.write((skipsize & 0x00ff)); 
         break;
@@ -209,10 +210,20 @@ struct bs_frame_s* I2C_active_scan(struct bs_request_s *request)
       
       I2C_active_scan1(request, reply, sda_pin, scl_pin);
     }
+    
     // Only yield between SDA pin changes to prevent buffer overflow 
     // without breaking the I2C timing inside the SCL loop.
     yield(); 
   }
+  Wire.endTransmission(); // Ensure bus is released
+    for (int i = 0; i < N_GPIO; i++) {
+        pinMode(gpioIndex[i], INPUT); // Force all pins back to high-impedance
+    }
+    
+    // Give the ESP8266 a moment to let background tasks settle 
+    // before returning to the main loop.
+    delay(50);
+  yield();
   return reply;
 }
 struct bs_frame_s*
