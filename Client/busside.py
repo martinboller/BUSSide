@@ -134,7 +134,6 @@ if len(sys.argv) != 2:
 
 device = sys.argv[1]
 
-
 def printHelp():
     print("+++ The BUSSide accepts the following commands")
     print("+++")
@@ -180,7 +179,7 @@ def printHelp():
 
 def doCommand(command):
     # STEP 1: Check for exit immediately
-    # This prevents the print() and the hardware sync from ever running
+    # This prevents the print(), device reset, and the hardware sync from ever running
     if command.strip().lower() in ["quit", "exit"]:
         return -1
     
@@ -189,7 +188,7 @@ def doCommand(command):
         return True # Return True so the main loop knows it was handled
 
     # 2. Hardware Commands (Reset + Sync)
-    print(f"+++ Resetting and Syncing NodeMCU for {command}...")
+    print(f"+++ Resetting and Syncing NodeMCU for <{command}>...")
     
     # Trigger the hardware reset
     bs.ResetDevice()

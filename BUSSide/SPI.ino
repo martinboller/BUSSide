@@ -371,8 +371,8 @@ send_SPI_command(struct bs_request_s *request)
 
   reply_data = (uint32_t *)&reply->bs_payload[0];
   
-  cmd = (uint8_t *)alloca(cmdsize);
-  data = (uint8_t *)alloca(cmdsize);
+  cmd = (uint8_t *)malloc(cmdsize);
+  data = (uint8_t *)malloc(cmdsize);
   for (int i = 0; i < cmdsize; i++) { 
     cmd[i] = request_args[6 + i];
   }
@@ -382,6 +382,8 @@ send_SPI_command(struct bs_request_s *request)
   }
   reply->bs_payload_length = cmdsize*4;
   return reply;
+  free(cmd);
+  free(data);
 }
 
 struct bs_frame_s*
