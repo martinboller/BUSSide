@@ -1,0 +1,6 @@
+# BUSSide Python Dependencies
+# Required for serial communication with the hardware bridge
+pyserial>=3.5
+
+# Required for flashing the firmware to ESP8266/ESP32 devices
+esptool>=4.0
