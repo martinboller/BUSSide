@@ -387,7 +387,7 @@ def Connect(device, ltimeout=2, nretries=10):
                     print("--- Echo failed, retrying...")
                     myserial.close()
                     continue
-                print("+++ OK")
+                # print("+++ OK")
                 return rv
             return (1, 1)
         except Exception as e:
