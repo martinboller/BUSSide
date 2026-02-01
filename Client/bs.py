@@ -135,10 +135,6 @@ def FlushInput():
     name). This is useful after opening the port to discard any leftover
     bytes (boot messages, garbled data) before starting protocol frames.
     """
-    try:
-        self.myserial.reset_input_buffer()
-    except Exception as e:
-        print(f"Warning: Serial flush failed (Device might have reset): {e}")
     global myserial
 
     myserial.flushInput()

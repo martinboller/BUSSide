@@ -2,6 +2,92 @@
 
 import os
 import sys
+import readline
+import traceback
+
+# Define the command hierarchy
+COMMAND_TREE = {
+     'i2c': {
+        'discover': ['pinout'],
+        'scan': [],
+        'dump': ['<addr> <len>'],
+    },
+    'jtag': {
+        'discover': ['pinout']
+    },
+    'spi': {
+        'discover': ['pinout'],
+        'send': {
+            'default': ['<cmdbyte1>'],
+            '<cs>': ['<clk> <mosi> <miso> <cmdbyte1>']
+        },
+        'fuzz': ['<cs> <clk> <mosi> <miso>'],
+        'flash': {
+            'erase': {
+                'sector': ['<address>']
+            },
+            'wp': ['enable', 'disable'],
+            'read': {
+                'id': ['<cs> <clk> <mosi> <miso>'],
+                'uid': ['<cs> <clk> <mosi> <miso>'],
+                'sreg1': ['<cs> <clk> <mosi> <miso>'],
+                'sreg2': ['<cs> <clk> <mosi> <miso>']
+            },
+            'dump': ['<size> <outfile>'],
+            'write': ['<size> <infile>']
+        }
+    },
+    'uart': {
+        'discover': ['data', 'rx', 'tx'],
+        'passthrough': {
+            'auto': [],
+            '<rx_gpio>': ['<tx_gpio> <baudrate>']
+        }
+    },
+    'quit': [],
+    'exit': []
+}
+
+def completer(text, state):
+    buffer = readline.get_line_buffer()
+    parts = buffer.lstrip().split()
+    
+    # If the buffer ends in a space, we are looking for the NEXT word
+    if buffer.endswith(' '):
+        parts.append('')
+
+    node = COMMAND_TREE
+    
+    # Navigate the tree based on parts already typed
+    for i in range(len(parts) - 1):
+        word = parts[i]
+        if isinstance(node, dict):
+            if word in node:
+                node = node[word]
+            # Handle cases where a key might be a placeholder like <cs>
+            elif list(node.keys())[0].startswith('<'):
+                node = node[list(node.keys())[0]]
+            else:
+                return None
+        elif isinstance(node, list):
+            # We've reached a terminal list of options/hints
+            return None
+        else:
+            return None
+
+    # Generate matches based on the current node
+    options = []
+    if isinstance(node, dict):
+        options = [k + ' ' for k in node.keys() if k.startswith(text)]
+    elif isinstance(node, list):
+        options = [item + ' ' for item in node if item.startswith(text)]
+
+    if state < len(options):
+        return options[state]
+    return None
+
+readline.set_completer(completer)
+readline.parse_and_bind("tab: complete")
 
 from click import command
 # Ensure the Client/ directory is on sys.path when running from repo root
@@ -27,6 +113,19 @@ device = sys.argv[1]
 def printHelp():
     print("+++ The BUSSide accepts the following commands")
     print("+++")
+    print("I2C Commands:")
+    print("+++ > i2c discover pinout")
+    print("+++ > i2c discover slaves <sdaPin> <sclPin>")
+    print(
+        "+++ > i2c flash dump <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <outfile>"
+    )
+    print(
+        "+++ > i2c flash write <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <infile>"
+    )
+    print("+++")
+    print("JTAG Commands:")
+    print("+++ > jtag discover pinout")
+    print("+++")
     print("SPI Commands:")
     print("+++ > spi discover pinout")
     print("+++ > spi send default <cmdbyte1> ....")
@@ -41,19 +140,6 @@ def printHelp():
     print("+++ > spi flash dump <size> <outfile>")
     print("+++ > spi flash write <size> <infile>")
     print("+++")
-    print("I2C Commands:")
-    print("+++ > i2c discover pinout")
-    print("+++ > i2c discover slaves <sdaPin> <sclPin>")
-    print(
-        "+++ > i2c flash dump <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <outfile>"
-    )
-    print(
-        "+++ > i2c flash write <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <infile>"
-    )
-    print("+++")
-    print("JTAG Commands:")
-    print("+++ > jtag discover pinout")
-    print("+++")
     print("UART Commands:")
     print("+++ > uart discover data")
     print("+++ > uart passthrough auto")
@@ -65,7 +151,6 @@ def printHelp():
     print("+++ > help - Print this help message")
     print("+++ > quit - quits the BUSSide program")
     print("+++")
-
 
 def doCommand(command):
     # STEP 1: Check for exit immediately
@@ -118,32 +203,44 @@ print("+++ Welcome to the BUSSide")
 printHelp()
 # print("+++")
 
+
+print("BUSSide Shell. Type 'quit' or hit Ctrl+D to exit.")
+
 while True:
     try:
-        command = input("> ")
-    except (EOFError, KeyboardInterrupt):
-        break
-
-    # Centralized handling: catch Ctrl-C and unexpected exceptions from
-    # module command handlers and print helpful diagnostics.
-    try:
+        # 1. Capture the input
+        command = input("BUSSide> ").strip()
+        if not command:
+            continue
+            
+        # 2. Execute
         rv = doCommand(command)
+
+        # 3. Evaluate return value
+        if rv is None:
+            printHelp()
+        elif rv == -1:
+            # User typed 'quit' or 'exit'
+            break
+
     except KeyboardInterrupt:
-        # User intentionally interrupted the running command.
-        print("\\n--- Command interrupted by user (Ctrl-C).")
-        continue
+        # User hit Ctrl+C during input OR during doCommand
+        print("\n--- Interrupted. (Type 'quit' to exit safely)")
+        # We continue here so a stray Ctrl+C doesn't kill your whole session
+        continue 
+    except EOFError:
+        # User hit Ctrl+D
+        print("\nExiting...")
+        break
     except Exception:
-        # Print a detailed traceback so the user can report the issue.
-        print("\\n--- ERROR: Exception while executing command:")
+        print("\n--- ERROR: Unexpected Exception:")
         traceback.print_exc()
         continue
 
-    if rv is None:
-        printHelp()
-    elif rv == -1:
-        # Exit cleanly without trying to communicate with BUSSide
-        print("Ciao!")
-        sys.exit(0)
+# The single, clean exit point
+print("Cleaning up and exiting... Ciao!")
+# If you are using a history file, it saves automatically here if using atexit
+sys.exit(0)
 
 # Turn off LED blinking when exiting normally (not quit)
 bs.set_led_blink(0)
