@@ -4,7 +4,7 @@ License: GPLv3
 An automated tool for hardware hacking and bus auditing. This repository is a modernized fork of the original **BUSSide** project developed by **Silvio Cesare**.
 
 ## Project Status: 2026 Update ## 
-The original BUSSide was a ground-breaking tool for hardware security researchers. However, as bit-rot set in, dependencies evolved. This fork was created to ensure the tool remains accessible and functional in a modern ecosystem.
+The original BUSSide was a ground-breaking tool for hardware security researchers. However hasn't been maintained for a while, and dependencies evolved. This fork was created to ensure the tool remains accessible and functional in a modern ecosystem.
 
 ### Key Improvements:
 * **Python 3 Migration:** Fully ported the client-side logic from Python 2.7 to Python 3.x.
