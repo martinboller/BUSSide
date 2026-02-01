@@ -26,10 +26,12 @@ import fcntl
 mydevice = None  # path to serial device (e.g. /dev/ttyUSB0)
 mytimeout = 10  # default read timeout in seconds
 myserial = None  # instance of serial.Serial once connected
-sequence_number = 5  # current outgoing sequence number (persisted to /tmp)
+sequence_number = 5  # current outgoing sequence number (persisted to file)
 oldterm = 0  # saved terminal attributes for keys_* helpers
 oldflags = 0  # saved file flags for stdin
 baudrate = 500000  # serial baud rate to open the device with
+# define squence number file path
+sequence_file_path = os.path.expanduser("~/.BUSSide/sequence")
 
 def keys_isData():
     """Return True if a character is available on stdin (non-blocking).
@@ -128,7 +130,7 @@ def ResetDevice():
         print(f"--- Warning: Could not reset hardware: {e}")
 
 def next_sequence_number():
-    """Advance the sequence number and persist it to /tmp/BUSSide.seq.
+    """Advance the sequence number and persist it to .
 
     The sequence number is advanced modulo 2^30 to keep it bounded, then
     the new value is written (little-endian) to a temporary file. Writing
@@ -138,7 +140,7 @@ def next_sequence_number():
     global sequence_number
 
     sequence_number = (sequence_number + 1) % (1 << 30)
-    with open("/tmp/BUSSide.seq", "wb") as f:
+    with open(sequence_file_path, "wb") as f:
         f.write(struct.pack("<I", sequence_number))
 
 

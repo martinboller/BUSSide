@@ -12,9 +12,19 @@ import bs_jtag
 import bs
 import bs_spi
 import atexit
+from pathlib import Path
+
+# Define your directory path
+data_dir = Path(os.path.expanduser("~/.BUSSide"))
+
+# Create the directory
+data_dir.mkdir(parents=True, exist_ok=True)
 
 # Define history path
-history_path = os.path.expanduser("~/.busside_history")
+history_path = os.path.expanduser("~/.BUSSide/history")
+
+# define squence number file path
+sequence_file_path = os.path.expanduser("~/.BUSSide/sequence")
 
 # 1. Load history if it exists
 if os.path.exists(history_path):
@@ -188,7 +198,7 @@ def doCommand(command):
         return True # Return True so the main loop knows it was handled
 
     # 2. Hardware Commands (Reset + Sync)
-    print(f"+++ Resetting and Syncing NodeMCU for <{command}>...")
+    print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
     
     # Trigger the hardware reset
     bs.ResetDevice()
@@ -223,7 +233,7 @@ def doCommand(command):
         return None
 
 try:
-    with open("/tmp/BUSSide.seq", "rb") as f:
+    with open(sequence_file_path, "rb") as f:
         d = f.read(4)
         if len(d) == 4:
             (seq,) = struct.unpack("<I", d)
