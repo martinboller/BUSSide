@@ -6,41 +6,33 @@
 int write_enable(uint32_t spispeed);
 int write_disable(uint32_t spispeed);
 
-/**
- * spi_transfer_byte: Sends and receives 1 byte manually.
- * This "bit-bangs" the protocol by toggling pins in a loop.
- */
-uint8_t spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gpio_MISO, uint8_t data)
+static uint8_t spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gpio_MOSI, int gpio_MISO, uint8_t data)
 {
   uint8_t x = 0;
 
-  ESP.wdtFeed(); // Keep the system from rebooting during the loop
-  digitalWrite(gpio_CLK, LOW); // Ensure clock starts low (Mode 0)
+  ESP.wdtFeed();
+  digitalWrite(gpio_CLK, LOW);
   
-  for (int i = 0x80; i; i >>= 1) {// Iterate through each of the 8 bits (MSB first)
-    // 1. Set the MOSI (Output) pin
+  for (int i = 0x80; i; i >>= 1) {
     if (data & i) {
       digitalWrite(gpio_MOSI, HIGH);
     } else {
       digitalWrite(gpio_MOSI, LOW);
     }
-    delay_us(50); // Small delay to satisfy chip timing requirements
+    delay_us(50);
     
-    // 2. Pulse the CLK (Clock) high
     digitalWrite(gpio_CLK, HIGH);
-    delay_us(50); // Small delay to satisfy chip timing requirements
-
-    // 3. Read the MISO (Input) pin while the clock is high  
+    delay_us(50);  
+      
     if(digitalRead(gpio_MISO) == HIGH) {
-      x |= i; // Construct the return byte bit-by-bit
+      x |= i;
     }
-    // 4. Return clock to low to finish the cycle for this bit
     digitalWrite(gpio_CLK, LOW);
   }
   return x;
 }
 
-int spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
+static int spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(gpioIndex[cs], OUTPUT);
   pinMode(gpioIndex[clk], OUTPUT);
@@ -66,7 +58,7 @@ int spi_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, 
   return 0;
 }
 
-int spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
+static int spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *out, uint32_t wrsize, uint8_t *in, int rdsize)
 {
   pinMode(CS_GPIO, OUTPUT);
   digitalWrite(CS_GPIO, HIGH);
@@ -88,7 +80,7 @@ int spi_hw_bb_send_fast_command(int spispeed, int cs, int clk, int mosi, int mis
 
   return 0;
 }
-int spi_bb_send_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *in, uint8_t *out, int n)
+static int spi_bb_send_command(int spispeed, int cs, int clk, int mosi, int miso, uint8_t *in, uint8_t *out, int n)
 {
   pinMode(gpioIndex[cs], OUTPUT);
   pinMode(gpioIndex[clk], OUTPUT);
@@ -128,7 +120,6 @@ spi_read_id_bb(struct bs_request_s *request)
   mosi = request_args[3] - 1;
   miso = request_args[4] - 1;
 
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 3*4);
   if (reply == NULL)
     return NULL;
@@ -206,19 +197,18 @@ spi_discover(struct bs_request_s *request)
   if (reply == NULL)
     return NULL;
 
+  reply_data = (uint32_t *)&reply->bs_payload[0];
   index = 0;
-  // Optimize SPI discovery by limiting pin range to speed up scanning
-  const int MAX_PIN = 8; // Limit to pins 0-7 for faster discovery
-  for (int cs = 0; cs < MAX_PIN; cs++) {
-    for (int clk = 0; clk < MAX_PIN; clk++) {
+  for (int cs = 0; cs < N_GPIO; cs++) {
+    for (int clk = 0; clk < N_GPIO; clk++) {
       if (clk == cs)
         continue;
-      for (int mosi = 0; mosi < MAX_PIN; mosi++) {       
+      for (int mosi = 0; mosi < N_GPIO; mosi++) {       
         if (mosi == clk)
           continue;
         if (mosi == cs)
           continue;
-        for (int miso = 0; miso < MAX_PIN; miso++) {
+        for (int miso = 0; miso < N_GPIO; miso++) {
           uint8_t cmd[4] = { 0x9f, 0x00, 000, 0x00 }; 
           uint8_t v[4];
                  
@@ -394,10 +384,6 @@ send_SPI_command(struct bs_request_s *request)
   return reply;
 }
 
-/**
- * read_SPI_flash: Dumps data from a Flash chip.
- * Uses standard command 0x03 (Read Data).
- */
 struct bs_frame_s*
 read_SPI_flash(struct bs_request_s *request)
 {

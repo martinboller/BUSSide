@@ -6,7 +6,7 @@
 
 uint32_t usTicks = 0;
 
-int gpioVal[N_GPIO];
+static int gpioVal[N_GPIO];
 
 #define sampleTx(pin) digitalRead(pin)
 
@@ -27,10 +27,9 @@ struct uartInfo_s {
   { 0, 0 },
 };
 
-int uartSpeedIndex;
+static int uartSpeedIndex;
 
-unsigned int
-findNumberOfUartSpeeds(void)
+static unsigned int findNumberOfUartSpeeds(void)
 {
   unsigned int i;
 
@@ -38,8 +37,7 @@ findNumberOfUartSpeeds(void)
   return i;
 }
 
-int
-waitForIdle(int pin)
+static int waitForIdle(int pin)
 {
   unsigned long startTime;
   unsigned long bitTime10;
@@ -60,8 +58,7 @@ start:
   return 0;
 }
 
-int
-buildwidths(int pin, int *widths, int nwidths)
+static int buildwidths(int pin, int *widths, int nwidths)
 {
   int val;
   int32_t startTime;
@@ -90,8 +87,7 @@ buildwidths(int pin, int *widths, int nwidths)
   return 0;
 }
 
-unsigned int
-findminwidth(int *widths, int nwidths)
+static unsigned int findminwidth(int *widths, int nwidths)
 {
   int minIndex1;
   unsigned int min1;
@@ -107,8 +103,7 @@ findminwidth(int *widths, int nwidths)
 }
 
 
-float
-autobaud(int pin, int *widths, int nwidths)
+static float autobaud(int pin, int *widths, int nwidths)
 {
   int sum;
   int c = 0;
@@ -123,8 +118,7 @@ autobaud(int pin, int *widths, int nwidths)
   return (float)sum/(float)c;
 }
 
-int
-tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
+static int tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
 {
   float width_timepos = 0.0;
   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
@@ -149,8 +143,7 @@ tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
   return 1;
 }
 
-int
-calcBaud(int pin, int *widths, int nwidths)
+static int calcBaud(int pin, int *widths, int nwidths)
 {
   char fstr[6];
   char s[100];
@@ -179,8 +172,7 @@ calcBaud(int pin, int *widths, int nwidths)
   return baudIndex;
 }
 
-int
-calcParity(int frameSize, int stopBits, int *widths, int nwidths)
+static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
 {
   float width_timepos = 0.0;
   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
@@ -235,16 +227,15 @@ calcParity(int frameSize, int stopBits, int *widths, int nwidths)
   return 0;
 }
 
-int frameSize;
-int stopBits;
-int dataBits;
-int parity;
-float bitTime;
+static int frameSize;
+static int stopBits;
+static int dataBits;
+static int parity;
+static float bitTime;
 
 #define NWIDTHS 200
 
-int
-UART_line_settings_direct(struct bs_reply_s *reply, int index)
+static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
 {
   int widths[NWIDTHS];
   char s[100];
@@ -315,7 +306,6 @@ UART_all_line_settings(struct bs_request_s *request)
   struct bs_frame_s *reply;
   int u = 0;
 
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions  
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 4*5*N_GPIO);
   if (reply == NULL)
     return NULL;
@@ -382,13 +372,14 @@ data_discovery(struct bs_request_s *request)
   return reply;
 }
 
+
 struct bs_frame_s*
 UART_passthrough(struct bs_request_s *request)
 {
   uint32_t *request_args;
   int rxpin, txpin;
   int baudrate;
-  unsigned long lastBlink = 0;
+
   request_args = (uint32_t *)&request->bs_payload[0];
   rxpin = request_args[0];
   txpin = request_args[1];
@@ -398,19 +389,6 @@ UART_passthrough(struct bs_request_s *request)
   while (1) {
     ESP.wdtFeed();
     
-    // Check for sync bytes to exit passthrough
-    if (Serial.available() >= 2) {
-      int ch1 = Serial.peek();
-      if (ch1 == 0xFE) {
-        Serial.read(); // consume the first byte
-        int ch2 = Serial.read();
-        if (ch2 == 0xCA) {
-          // Received sync bytes, exit passthrough
-          break;
-        }
-      }
-    }
-    
     while (ser.available() > 0) {
       Serial.write(ser.read());
       yield();
@@ -419,12 +397,7 @@ UART_passthrough(struct bs_request_s *request)
     while (Serial.available() > 0) {
       ser.write(Serial.read());
       yield();
-    }
-    
-    // Update LED blink
-    if (millis() - lastBlink > 500) {
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-      lastBlink = millis();
+      ESP.wdtFeed();
     }
   }
   return NULL;

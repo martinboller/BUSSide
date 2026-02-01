@@ -2,8 +2,6 @@
 #include <Wire.h>
 
 struct bs_frame_s*
-  
-// 1. EXTRACT ARGUMENTS: The PC sends 32-bit integers in the payload
 read_I2C_eeprom(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
@@ -16,41 +14,35 @@ read_I2C_eeprom(struct bs_request_s *request)
   int addressLength;
   
   request_args = (uint32_t *)&request->bs_payload[0];
-  slaveAddress = request_args[0]; // I2C 7-bit address
-  readsize = request_args[1]; // Total bytes to read
-  skipsize = request_args[2]; // Starting memory address offset
-  sdaPin = request_args[3] - 1; // Map human-friendly pin to array index
+  slaveAddress = request_args[0];
+  readsize = request_args[1];
+  skipsize = request_args[2];
+  sdaPin = request_args[3] - 1;
   sclPin = request_args[4] - 1;
-  addressLength = request_args[5]; // 1 or 2 bytes for memory addressing
+  addressLength = request_args[5];
 
-  // 2. ALLOCATE REPLY: Space for header + the requested data
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + readsize);
   if (reply == NULL)
     return NULL;
 
-  // 2. ALLOCATE REPLY: Space for header + the requested data
   reply->bs_command = BS_REPLY_I2C_FLASH_DUMP;
   reply_data = (uint8_t *)&reply->bs_payload[0];
-
-  // 4. SET MEMORY POINTER: Tell where we want to start reading
+  
   Wire.begin(gpioIndex[sdaPin], gpioIndex[sclPin]);  
   
   Wire.beginTransmission(slaveAddress);
   switch (addressLength) {
-    case 2: // For larger EEPROMs (e.g., 24C64+) requiring 16-bit addresses
+    case 2:
       Wire.write((skipsize & 0xff00) >> 8); // send the high byte of the EEPROM memory address
-    case 1: // For smaller EEPROMs (e.g., 24C02) requiring 8-bit addresses
+    case 1:
       Wire.write((skipsize & 0x00ff)); // send the low byte
       break;
     default:
       free(reply);
       return NULL;
   }
-  Wire.endTransmission(); // Execute the pointer set
+  Wire.endTransmission(); 
 
-  // 5. BULK READ: Request data in small chunks (8 bytes at a time)
-  // This helps avoid overflowing the small internal Wire buffer (32 bytes)
   i = 0;
   while (readsize > 0) {
     uint32_t gotRead;
@@ -73,17 +65,31 @@ read_I2C_eeprom(struct bs_request_s *request)
 }
 
 
-int write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength, uint32_t val)
+int
+write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength, uint32_t val)
 {
-    // ... (rest of your switch and write logic)
+    Wire.beginTransmission(slaveAddress);
+    switch (addressLength) {
+      case 2:
+        Wire.write((skipsize & 0xff00) >> 8); 
+      case 1:
+        Wire.write((skipsize & 0x00ff)); 
+        break;
+      default:
+        Wire.endTransmission();
+        return -1;
+    }
+    Wire.write(val);
+    Wire.endTransmission();
     
     for (int i = 0; i < 100; i++) {
       Wire.beginTransmission(slaveAddress);
       if (Wire.endTransmission() == 0) {
-        return 0; // Success
+        return 0; // Success!
       }
       delay(10);
     }
+
     return -1; // <--- ADD THIS: Return -1 if the loop times out
 }
 
@@ -107,7 +113,6 @@ write_I2C_eeprom(struct bs_request_s *request)
   addressLength = request_args[5];
   request_data = (uint8_t *)&request_args[6];
 
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
   if (reply == NULL)
     return NULL;
@@ -133,68 +138,83 @@ write_I2C_eeprom(struct bs_request_s *request)
   return reply;
 }
 
-void
-I2C_active_scan1(struct bs_request_s *request, struct bs_reply_s *reply, int sdaPin, int sclPin)
+static void I2C_active_scan1(struct bs_request_s *request, struct bs_frame_s *reply, int sdaPin, int sclPin)
 {
-  uint32_t *reply_data;
-  int numberOfSlaves;
-  
-  Wire.begin(gpioIndex[sdaPin], gpioIndex[sclPin]);  
-  numberOfSlaves = 0;
-  for (int slaveAddress = 0; slaveAddress < 128; slaveAddress++) {
-    int rv1, rv2;
-
-    ESP.wdtFeed();
-    Wire.beginTransmission(slaveAddress);
-    if (Wire.endTransmission() == 0) {
-      int n;
-      int gotitalready;
-      
-#define BYTESTOREAD 8
-      n = Wire.requestFrom(slaveAddress, BYTESTOREAD);
-      if (n != BYTESTOREAD)
-        continue;
-      ESP.wdtFeed();
-      numberOfSlaves++;
-    }
-  }
-  if (numberOfSlaves > 0) {
-    int index;
+    uint32_t *reply_data;
+    const int MAX_ENTRIES = 50; 
     
-    // Simplified: Skip the 10 verification scans for faster discovery
-    index = reply->bs_payload_length / 8;
-    reply_data = (uint32_t *)&reply->bs_payload[0];
-    reply_data[2*index + 0] = sdaPin + 1;
-    reply_data[2*index + 1] = sclPin + 1;
-    reply->bs_payload_length += 4*2;
-  }
+    int sdaGPIO = gpioIndex[sdaPin];
+    int sclGPIO = gpioIndex[sclPin];
+
+    // 1. SAFETY CHECK: Ensure lines aren't physically shorted to GND
+    // We use pullups and check if the pins actually go HIGH.
+    pinMode(sdaGPIO, INPUT_PULLUP);
+    pinMode(sclGPIO, INPUT_PULLUP);
+    delayMicroseconds(50); 
+    
+    if (digitalRead(sdaGPIO) == LOW || digitalRead(sclGPIO) == LOW) {
+        // Line is stuck LOW (hardware issue or no pullup). 
+        // We MUST skip this pair to avoid a library hang.
+        return; 
+    }
+
+    // 2. INITIALIZE WIRE
+    Wire.begin(sdaGPIO, sclGPIO);  
+    Wire.setClock(100000);
+    
+    // Corrected member name for ESP8266 Wire library
+    Wire.setTimeout(500); // 500ms timeout
+
+    bool found = false;
+    // Scan standard 7-bit address range
+    for (int addr = 0x08; addr < 0x78; addr++) {
+        Wire.beginTransmission(addr);
+        // endTransmission returns 0 on success
+        if (Wire.endTransmission() == 0) {
+            found = true;
+            break; 
+        }
+    }
+
+    // 3. LOG SUCCESSFUL PIN PAIR
+    if (found) {
+        int index = reply->bs_payload_length / 8; 
+        if (index < MAX_ENTRIES) {
+            reply_data = (uint32_t *)&reply->bs_payload[0];
+            reply_data[2 * index + 0] = (uint32_t)(sdaPin + 1);
+            reply_data[2 * index + 1] = (uint32_t)(sclPin + 1);
+            reply->bs_payload_length += 8;
+        }
+    }
+    
+    // 4. CLEANUP: Reset pins to floating input state
+    // This prevents the I2C hardware logic from "locking" the pins
+    pinMode(sdaGPIO, INPUT);
+    pinMode(sclGPIO, INPUT);
 }
 
-struct bs_frame_s*
-I2C_active_scan(struct bs_request_s *request)
+struct bs_frame_s* I2C_active_scan(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
-  uint32_t *request_args;
-  
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
-  reply = (struct bs_reply_s *)malloc(BS_HEADER_SIZE + 4*2*50);
-  if (reply == NULL)
-    return NULL;
+  reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + (8 * 50));
+  if (reply == NULL) return NULL;
 
+  reply->bs_command = BS_REPLY_I2C_DISCOVER;
   reply->bs_payload_length = 0;
     
-  for (int sda_pin=1; sda_pin < N_GPIO; sda_pin++) {
-    ESP.wdtFeed();
-    for(int scl_pin = 1; scl_pin < N_GPIO; scl_pin++) {
-      ESP.wdtFeed();
-      if (sda_pin == scl_pin)
-        continue;
+  for (int sda_pin = 0; sda_pin < N_GPIO; sda_pin++) {
+    ESP.wdtFeed(); // Feed every SDA row
+    for(int scl_pin = 0; scl_pin < N_GPIO; scl_pin++) {
+      if (sda_pin == scl_pin) continue;
+      
       I2C_active_scan1(request, reply, sda_pin, scl_pin);
     }
+    // Only yield between SDA pin changes to prevent buffer overflow 
+    // without breaking the I2C timing inside the SCL loop.
+    yield(); 
   }
   return reply;
 }
-
 struct bs_frame_s*
 discover_I2C_slaves(struct bs_request_s *request)
 {
@@ -207,7 +227,6 @@ discover_I2C_slaves(struct bs_request_s *request)
   sdaPin = request_args[0] - 1;
   sclPin = request_args[1] - 1;
 
-  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 128*4);
   if (reply == NULL)
     return NULL;
