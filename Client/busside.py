@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import cmd
 import os
 import sys
 import readline
@@ -176,6 +177,7 @@ def printHelp():
     print("+++ BUSSide> Type quit, exit or hit Ctrl+D to exit.")
     print("+++")
     print("BUSSide Shell")
+
 def doCommand(command):
     # STEP 1: Check for exit immediately
     # This prevents the print() and the hardware sync from ever running
@@ -186,6 +188,20 @@ def doCommand(command):
         printHelp()
         return True # Return True so the main loop knows it was handled
 
+    # 2. Hardware Commands (Reset + Sync)
+    print(f"+++ Resetting and Syncing NodeMCU for {command}...")
+    
+    # Trigger the hardware reset
+    bs.ResetDevice()
+    
+    # Perform the handshake
+    bs.FlushInput()
+    bs.NewTimeout(30)
+    sync_result = bs.requestreply(0, [0x12345678])
+    
+    if sync_result is None:
+        print("--- Error: Device failed to sync after reset.")
+        return None
     # STEP 2: Now that we know it's a real command, perform sync
     # print("+++ Syncing with BUSSide before command execution...")
     bs.FlushInput()

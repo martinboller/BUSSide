@@ -31,7 +31,6 @@ oldterm = 0  # saved terminal attributes for keys_* helpers
 oldflags = 0  # saved file flags for stdin
 baudrate = 500000  # serial baud rate to open the device with
 
-
 def keys_isData():
     """Return True if a character is available on stdin (non-blocking).
 
@@ -112,6 +111,21 @@ def get_sequence_number():
 
     return sequence_number
 
+def ResetDevice():
+    """Triggers the NodeMCU hardware reset circuit via DTR/RTS."""
+    try:
+        if myserial is not None:
+            # Most NodeMCU reset circuits trigger when DTR is False and RTS is True, 
+            # or by toggling them in a specific sequence.
+            myserial.setDTR(False)
+            myserial.setRTS(True)
+            time.sleep(0.1)
+            myserial.setDTR(False)
+            myserial.setRTS(False)
+            time.sleep(0.5) # Wait for bootloader/firmware to start
+            myserial.reset_input_buffer()
+    except Exception as e:
+        print(f"--- Warning: Could not reset hardware: {e}")
 
 def next_sequence_number():
     """Advance the sequence number and persist it to /tmp/BUSSide.seq.
