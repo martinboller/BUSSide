@@ -8,7 +8,7 @@
 
 #define microsTime() (micros())
 
-// Forward declaration of the safety function to reset pins
+// Forward declaration to reset pins
 void reset_gpios();
 
 // Mapping the virtual GPIO names to physical ESP8266 pins
@@ -113,6 +113,7 @@ struct bs_frame_s *led_blink(struct bs_request_s *request) {
   }
   
   // Create a simple reply
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow across all functions (don't forget to free later to avoid memory leaks)
   struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
   if (reply) {
     reply->bs_command = BS_REPLY_LED_BLINK;

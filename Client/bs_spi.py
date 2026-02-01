@@ -64,7 +64,7 @@ def spi_dump_flash(dumpsize, outfile):
                 f.flush()
                 skip += size
                 dumpsize -= size
-        print("+++ SUCCESS\n")
+        print("+++ SPI Dump Command Successfully Completed\n")
     except Exception as e:
         print(f"--- File Error: {e}")
     return (1, 1)
@@ -87,7 +87,7 @@ def spi_read_id():
     v2 = bs_reply_args[1]
     v3 = bs_reply_args[2]
     print("+++ SPI ID %.2x%.2x%.2x" % (v1, v2, v3))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Read ID Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -153,7 +153,7 @@ def spi_flash(dumpsize, infile):
                     return None
                 skip += size
                 dumpsize -= size
-        print("+++ SUCCESS\n")
+        print("+++ SPI Flash Command Successfully Completed\n")
     except Exception as e:
         print(f"--- File Error: {e}")
     return (1, 1)
@@ -196,7 +196,7 @@ def spi_fuzz(cs, clk, mosi, miso):
         print("+++ SPI v3 %.2x" % (v3))
         print("+++ SPI v4 %.2x" % (v4))
         print("+++ SPI v5 %.2x" % (v5))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Fuzz Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -227,7 +227,7 @@ def spi_discover_pinout():
         print("+++ SPI CLK at GPIO %i" % (clk))
         print("+++ SPI MOSI at GPIO %i" % (mosi))
         print("+++ SPI MISO at GPIO %i" % (miso))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Discover Pinout Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -252,7 +252,7 @@ def spi_streg1(cs, clk, mosi, miso):
     bs_reply_length, bs_reply_args = rv
     for i in range(1, 2):
         print("+++ STATUS REGISTER 1: %.2x" % (bs_reply_args[i]))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Read Status Register 1 Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -277,7 +277,7 @@ def spi_streg2(cs, clk, mosi, miso):
     bs_reply_length, bs_reply_args = rv
     for i in range(1, 2):
         print("+++ STATUS REGISTER 2: %.2x" % (bs_reply_args[i]))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Read Status Register 2 Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -331,7 +331,7 @@ def spi_readuid(cs, clk, mosi, miso):
     bs_reply_length, bs_reply_args = rv
     for i in range(5, 13):
         print("+++ UID: %.2x" % (bs_reply_args[i]))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Read UID Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -373,7 +373,7 @@ def doSendCommand(cs, clk, mosi, miso, args):
     bs_reply_length, bs_reply_args = rv
     for i in range(min(n, len(bs_reply_args))):
         print("+++ SPI Response: %.2x" % (bs_reply_args[i]))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Send Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -396,7 +396,7 @@ def spi_wp_enable(cs, clk, mosi, miso):
     if rv is None:
         return None
     bs_reply_length, bs_reply_args = rv
-    print("+++ SUCCESS\n")
+    print("+++ SPI Write Protect Command Enable Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -419,7 +419,7 @@ def spi_wp_disable(cs, clk, mosi, miso):
     if rv is None:
         return None
     bs_reply_length, bs_reply_args = rv
-    print("+++ SUCCESS\n")
+    print("+++ SPI Write Protect Disable Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -446,7 +446,7 @@ def spi_bb_read_id(cs, clk, mosi, miso):
     v2 = bs_reply_args[1]
     v3 = bs_reply_args[2]
     print("+++ SPI ID %.2x%.2x%.2x" % (v1, v2, v3))
-    print("+++ SUCCESS\n")
+    print("+++ SPI Read ID Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -470,7 +470,7 @@ def spi_erase_sector(skipsize, cs, clk, mosi, miso):
     if rv is None:
         return None
     bs_reply_length, bs_reply_args = rv
-    print("+++ SUCCESS\n")
+    print("+++ SPI Erase Sector Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 

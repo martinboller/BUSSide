@@ -315,6 +315,7 @@ UART_all_line_settings(struct bs_request_s *request)
   struct bs_frame_s *reply;
   int u = 0;
 
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions  
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 4*5*N_GPIO);
   if (reply == NULL)
     return NULL;

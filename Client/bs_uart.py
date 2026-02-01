@@ -28,7 +28,7 @@ def uart_data_discover():
     ngpio = 9
     for i in range(ngpio):
         print("+++ SIGNAL CHANGES: D%d --> %d" % ((i + 1), bs_reply_args[i]))
-    print("+++ SUCCESS")
+    print("+++ UART Data Discover Command Successfully Completed\n")
     return rv
 
 
@@ -46,7 +46,7 @@ def uart_tx(rxpin, baudrate):
         print("+++ FOUND UART TX on GPIO %d" % (txpin + 1))
     else:
         print("+++ NOT FOUND. Note that GPIO 1 can't be used here.")
-    print("+++ SUCCESS")
+    print("+++ UART Discovery TX Command Successfully Completed\n")
     return rv
 
 
@@ -79,7 +79,7 @@ def uart_rx():
                 else:
                     print("+++ PARITY: NONE")
                 print("+++ BAUDRATE: %d" % (baudrate))
-    print("+++ SUCCESS")
+    print("+++ UART Discovery RX Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 

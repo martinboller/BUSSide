@@ -770,6 +770,7 @@ JTAG_scan(struct bs_request_s *request)
   int rv;
   uint32_t *reply_data;
   
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 5*4);
   if (reply == NULL)
     return NULL;

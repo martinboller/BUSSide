@@ -37,7 +37,7 @@ def i2c_discover_slaves(sda, scl):
     print("+++ %d I2C slave addresses" % (nslave_addresses))
     for i in range(nslave_addresses):
         print("+++ I2C slave address FOUND at %i" % bs_reply_args[i])
-    print("+++ SUCCESS\n")
+    print("+++ I2C Discover Slaves Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -65,7 +65,7 @@ def i2c_discover():
         print("+++ I2C interface FOUND")
         print("+++ I2C SDA at GPIO %i" % (sda))
         print("+++ I2C SCL at GPIO %i" % (scl))
-    print("+++ SUCCESS\n")
+    print("+++ I2C Discover Pinout Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -225,7 +225,7 @@ def i2c_dump_flash(sda, scl, slave, alen, dumpsize, outfile):
             # advance by the actual transferred size
             skip += size
             dumpsize -= size
-        print("+++ SUCCESS\n")
+        print("+++ I2C Dump Successfully Completed\n")
         return (1, 1)
 
 
@@ -273,5 +273,5 @@ def i2c_write_flash(sda, scl, slave, alen, dumpsize, infile):
             # advance by the actual transferred size
             skip += size
             dumpsize -= size
-        print("+++ SUCCESS\n")
+        print("+++ I2C Write Flash Command Successfully Completed\n")
         return (1, 1)

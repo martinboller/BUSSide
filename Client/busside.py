@@ -72,9 +72,9 @@ def doCommand(command):
     bs.NewTimeout(30)
     sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO with test data
     if sync_result is None:
-        print("--- Sync failed - device not responsive")
+        #print("--- Sync failed - device not responsive")
         return None
-    print("+++ Device synced successfully")
+    #print("+++ Device synced successfully")
     
     if command.find("spi ") == 0:
         return bs_spi.doCommand(command[4:])

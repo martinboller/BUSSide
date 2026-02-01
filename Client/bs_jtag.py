@@ -45,7 +45,7 @@ def jtag_discover_pinout():
     else:
         print("--- No JTAG interfaces discovered.")
 
-    print("+++ SUCCESS")
+    print("+++ JTAG Discover Pinout Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
 
@@ -59,7 +59,6 @@ def doCommand(command):
     Returns:
         int or None: 0 on success, None on invalid command.
     """
-    # .startswith is cleaner and more 'Pythonic' than .find() == 0
     if command.strip() == "discover pinout":
         jtag_discover_pinout()
         return 0

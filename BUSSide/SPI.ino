@@ -128,6 +128,7 @@ spi_read_id_bb(struct bs_request_s *request)
   mosi = request_args[3] - 1;
   miso = request_args[4] - 1;
 
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 3*4);
   if (reply == NULL)
     return NULL;

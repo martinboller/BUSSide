@@ -2,7 +2,6 @@
 #include <Wire.h>
 
 struct bs_frame_s*
-// ... variable declarations ...
   
 // 1. EXTRACT ARGUMENTS: The PC sends 32-bit integers in the payload
 read_I2C_eeprom(struct bs_request_s *request)
@@ -25,6 +24,7 @@ read_I2C_eeprom(struct bs_request_s *request)
   addressLength = request_args[5]; // 1 or 2 bytes for memory addressing
 
   // 2. ALLOCATE REPLY: Space for header + the requested data
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later) across all functions
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + readsize);
   if (reply == NULL)
     return NULL;
@@ -107,6 +107,7 @@ write_I2C_eeprom(struct bs_request_s *request)
   addressLength = request_args[5];
   request_data = (uint8_t *)&request_args[6];
 
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
   if (reply == NULL)
     return NULL;
@@ -175,6 +176,7 @@ I2C_active_scan(struct bs_request_s *request)
   struct bs_frame_s *reply;
   uint32_t *request_args;
   
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_reply_s *)malloc(BS_HEADER_SIZE + 4*2*50);
   if (reply == NULL)
     return NULL;
@@ -205,6 +207,7 @@ discover_I2C_slaves(struct bs_request_s *request)
   sdaPin = request_args[0] - 1;
   sclPin = request_args[1] - 1;
 
+  // Changed to use malloc for dynamic memory allocation and avoid stack overflow (don't forget to free later)
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 128*4);
   if (reply == NULL)
     return NULL;
