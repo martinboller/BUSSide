@@ -4,6 +4,33 @@ import os
 import sys
 import readline
 import traceback
+import struct
+import bs_i2c
+import bs_uart
+import bs_jtag
+import bs
+import bs_spi
+import atexit
+
+# Define history path
+history_path = os.path.expanduser("~/.busside_history")
+
+# 1. Load history if it exists
+if os.path.exists(history_path):
+    try:
+        readline.read_history_file(history_path)
+    except Exception:
+        print("--- Warning: Could not read history file.")
+
+# 2. Define the save function
+def save_history():
+    try:
+        readline.write_history_file(history_path)
+    except Exception as e:
+        print(f"--- Warning: Could not save history: {e}")
+
+# 3. Register the save function to run AUTOMATICALLY on exit
+atexit.register(save_history)
 
 # Define the command hierarchy
 COMMAND_TREE = {
@@ -38,11 +65,15 @@ COMMAND_TREE = {
         }
     },
     'uart': {
-        'discover': ['data', 'rx', 'tx'],
+        'discover': {
+            'data': [],
+            'rx': [],
+            'tx': ['<rx_gpio> <baudrate>']
+        },
         'passthrough': {
             'auto': [],
-            '<rx_gpio>': ['<tx_gpio> <baudrate>']
-        }
+            '\'<rx_gpio> <tx_gpio> <baudrate>\'': []
+        },
     },
     'quit': [],
     'exit': []
@@ -93,13 +124,6 @@ from click import command
 # Ensure the Client/ directory is on sys.path when running from repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "Client"))
 
-import struct
-import traceback
-import bs_i2c
-import bs_uart
-import bs_jtag
-import bs
-import bs_spi
 
 sequence_number = 5
 
@@ -114,52 +138,56 @@ def printHelp():
     print("+++ The BUSSide accepts the following commands")
     print("+++")
     print("I2C Commands:")
-    print("+++ > i2c discover pinout")
-    print("+++ > i2c discover slaves <sdaPin> <sclPin>")
+    print("+++ BUSSide> i2c discover pinout")
+    print("+++ BUSSide> i2c discover slaves <sdaPin> <sclPin>")
     print(
-        "+++ > i2c flash dump <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <outfile>"
+        "+++ BUSSide> i2c flash dump <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <outfile>"
     )
     print(
-        "+++ > i2c flash write <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <infile>"
+        "+++ BUSSide> i2c flash write <sdaPin> <sclPin> <slaveAddress> <addressLength> <size> <infile>"
     )
     print("+++")
     print("JTAG Commands:")
-    print("+++ > jtag discover pinout")
+    print("+++ BUSSide> jtag discover pinout")
     print("+++")
     print("SPI Commands:")
-    print("+++ > spi discover pinout")
-    print("+++ > spi send default <cmdbyte1> ....")
-    print("+++ > spi send <cs> <clk> <mosi> <miso> <cmdbyte1> ....")
-    print("+++ > spi fuzz <cs> <clk> <mosi> <miso>")
-    print("+++ > spi flash erase sector <address>")
-    print("+++ > spi flash wp enable|disable")
-    print("+++ > spi flash read id [<cs> <clk> <mosi> <miso>]")
-    print("+++ > spi flash read uid [<cs> <clk> <mosi> <miso>]")
-    print("+++ > spi flash read sreg1 [<cs> <clk> <mosi> <miso>]")
-    print("+++ > spi flash read sreg2 [<cs> <clk> <mosi> <miso>]")
-    print("+++ > spi flash dump <size> <outfile>")
-    print("+++ > spi flash write <size> <infile>")
+    print("+++ BUSSide> spi discover pinout")
+    print("+++ BUSSide> spi send default <cmdbyte1> ....")
+    print("+++ BUSSide> spi send <cs> <clk> <mosi> <miso> <cmdbyte1> ....")
+    print("+++ BUSSide> spi fuzz <cs> <clk> <mosi> <miso>")
+    print("+++ BUSSide> spi flash erase sector <address>")
+    print("+++ BUSSide> spi flash wp enable|disable")
+    print("+++ BUSSide> spi flash read id [<cs> <clk> <mosi> <miso>]")
+    print("+++ BUSSide> spi flash read uid [<cs> <clk> <mosi> <miso>]")
+    print("+++ BUSSide> spi flash read sreg1 [<cs> <clk> <mosi> <miso>]")
+    print("+++ BUSSide> spi flash read sreg2 [<cs> <clk> <mosi> <miso>]")
+    print("+++ BUSSide> spi flash dump <size> <outfile>")
+    print("+++ BUSSide> spi flash write <size> <infile>")
     print("+++")
     print("UART Commands:")
-    print("+++ > uart discover data")
-    print("+++ > uart passthrough auto")
-    print("+++ > uart discover rx")
-    print("+++ > uart discover tx <rx_gpio> <baudrate>")
-    print("+++ > uart passthrough <rx_gpio> <tx_gpio> <baudrate>")
+    print("+++ BUSSide> uart discover data")
+    print("+++ BUSSide> uart discover rx")
+    print("+++ BUSSide> uart discover tx <rx_gpio> <baudrate>")
+    print("+++ BUSSide> uart passthrough auto")
+    print("+++ BUSSide> uart passthrough <rx_gpio> <tx_gpio> <baudrate>")
     print("+++")
     print("Other Commands:")
-    print("+++ > help - Print this help message")
-    print("+++ > quit - quits the BUSSide program")
+    print("+++ BUSSide> help - Print this help message")
+    print("+++ BUSSide> Type quit, exit or hit Ctrl+D to exit.")
     print("+++")
-
+    print("BUSSide Shell")
 def doCommand(command):
     # STEP 1: Check for exit immediately
     # This prevents the print() and the hardware sync from ever running
     if command.strip().lower() in ["quit", "exit"]:
         return -1
+    
+    if command.strip().lower() == "help":
+        printHelp()
+        return True # Return True so the main loop knows it was handled
 
     # STEP 2: Now that we know it's a real command, perform sync
-    print("+++ Syncing with BUSSide before command execution...")
+    # print("+++ Syncing with BUSSide before command execution...")
     bs.FlushInput()
     bs.NewTimeout(30)
    
@@ -201,9 +229,6 @@ print("+++ Welcome to the BUSSide")
 # print("+++")
 printHelp()
 # print("+++")
-
-
-print("BUSSide Shell. Type 'quit' or hit Ctrl+D to exit.")
 
 while True:
     try:
