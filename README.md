@@ -1,7 +1,5 @@
 # BUSSide (Modernized Fork)
-
-[![Python 3.x](https://img.shields.io/badge/python-3.x-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+License: GPLv3
 
 An automated tool for hardware hacking and bus auditing. This repository is a modernized fork of the original **BUSSide** project developed by **Silvio Cesare**.
 
