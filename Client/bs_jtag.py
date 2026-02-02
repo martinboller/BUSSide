@@ -29,11 +29,12 @@ def jtag_discover_pinout():
     bs_reply_length, bs_reply_args = rv
 
     num_found = bs_reply_args[0]
-    if num_found > 0:
+    # Calculate how many integers we expect based on num_found
+    expected_length = 1 + (num_found * 5)
+    # changed to not crash when tuple is "incomplete", say not all pins are returned
+    if num_found > 0 and len(bs_reply_args) >= expected_length:
         print(f"+++ {num_found} JTAG interface(s) FOUND")
 
-        # JTAG results are grouped in sets of 5: TCK, TMS, TDI, TDO, nTRST
-        # Values start from index 1
         for i in range(num_found):
             base = 1 + (i * 5)
             print(f"--- Interface #{i+1}:")
@@ -42,6 +43,8 @@ def jtag_discover_pinout():
             print(f"    TDI:   GPIO {bs_reply_args[base+2]}")
             print(f"    TDO:   GPIO {bs_reply_args[base+3]}")
             print(f"    nTRST: GPIO {bs_reply_args[base+4]}")
+    elif num_found > 0:
+        print(f"--- Warning: Found {num_found} interfaces, but received incomplete data (Length: {len(bs_reply_args)})")
     else:
         print("--- No JTAG interfaces discovered.")
 
