@@ -187,8 +187,24 @@ def printHelp():
     print("+++")
     print("BUSSide Shell")
 
+def reset_terminal():
+    """
+    Performs a hardware-level terminal reset (RIS).
+    """
+    # \033c is the ANSI 'Reset to Initial State' (RIS)
+    # It is much more powerful than the 'SGR 0' (\033[0m) sequence.
+    sys.stdout.write("\033c")
+    sys.stdout.flush()
+    
+    # Additionally, ensure the terminal line settings are sane 
+    # (Fixes issues where 'Enter' doesn't work or echo is off)
+    if sys.platform != "win32":
+        os.system("stty sane")
+
+    printHelp()
+
 def doCommand(command):
-    # STEP 1: Check for exit immediately
+    # STEP 1: Check for quit, exit or help immediately
     # This prevents the print(), device reset, and the hardware sync from ever running
     if command.strip().lower() in ["quit", "exit"]:
         return -1
@@ -198,11 +214,11 @@ def doCommand(command):
         return True # Return True so the main loop knows it was handled
 
     # 2. Hardware Commands (Reset + Sync)
-    print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
+    #print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
     
     # Trigger the hardware reset
-    bs.ResetDevice()
-    
+    #bs.ResetDevice()
+
     # Perform the handshake
     bs.FlushInput()
     bs.NewTimeout(30)
@@ -215,7 +231,7 @@ def doCommand(command):
     # print("+++ Syncing with BUSSide before command execution...")
     bs.FlushInput()
     bs.NewTimeout(30)
-   
+
     sync_result = bs.requestreply(0, [0x12345678])  # BS_ECHO
     if sync_result is None:
         return None
@@ -274,7 +290,8 @@ while True:
 
     except KeyboardInterrupt:
         # User hit Ctrl+C during input OR during doCommand
-        print("\n--- Interrupted. (Type 'quit' to exit safely)")
+        reset_terminal()
+        print("\n--- Interrupted. (Type 'quit' or hit Ctrl+D to exit safely)")
         # We continue here so a stray Ctrl+C doesn't kill your whole session
         continue 
     except EOFError:
@@ -284,7 +301,6 @@ while True:
         print("\n--- ERROR: Unexpected Exception:")
         traceback.print_exc()
         continue
-
 # The single, clean exit point
 print("Cleaning up and exiting... Ciao!")
 # If you are using a history file, it saves automatically here if using atexit
