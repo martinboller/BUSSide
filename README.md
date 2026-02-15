@@ -75,8 +75,13 @@ Make sure to
 ### NodeMCU v3 issues
 
 I had some issues with NodeMCU v3 boards registering as ID 1a86:7523 QinHeng Electronics CH340 serial converter, which conflicts with: 
-\# Device: 1A86:7523
-\# Baum [NLS eReader Zoomax (20 cells)]
-ENV{PRODUCT}=="1a86/7523/*", ENV{BRLTTY_BRAILLE_DRIVER}="bm", GOTO="brltty_usb_run"
 
-sudo nano /usr/lib/udev/rules.d/85-brltty.rules and comment the last line out.
+``` sh
+# Device: 1A86:7523
+
+# Baum [NLS eReader Zoomax (20 cells)]
+
+ENV{PRODUCT}=="1a86/7523/*", ENV{BRLTTY_BRAILLE_DRIVER}="bm", GOTO="brltty_usb_run"
+```
+
+edit the /usr/lib/udev/rules.d/85-brltty.rules and comment the last line out, the reboot.
