@@ -423,6 +423,55 @@ UART_testtx(SoftwareSerial *ser, int testChar)
   return 0;
 }
 
+// Original
+// struct bs_frame_s*
+// UART_discover_tx(struct bs_request_s *request)
+// {
+//   uint32_t *request_args, *reply_data;
+//   struct bs_frame_s *reply;
+//   int rxpin, txpin;
+//   int baudrate;
+
+//   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 4);
+//   if (reply == NULL)
+//     return NULL;
+//   reply->bs_payload_length = 4;
+//   reply_data = (uint32_t *)&reply->bs_payload[0];
+//   request_args = (uint32_t *)&request->bs_payload[0];
+//   rxpin = request_args[0] - 1;
+//   baudrate = request_args[1];
+//   for (txpin = 1; txpin < N_GPIO; txpin++) {
+//     int found;
+    
+//     ESP.wdtFeed();
+    
+//     if (rxpin == txpin)
+//       continue;
+      
+//     SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
+
+//     ser.begin(baudrate);
+//     while (ser.available()) {
+//       ser.read();
+//     }
+//     found = 1;
+//     for (const char *p = "BS"; *p; p++) {
+//       if (UART_testtx(&ser, *p) == 0) {
+//         found = 0;
+//         break;
+//       }
+//     }
+//     if (found) {
+//       reply_data[0] = txpin;
+//       return reply;
+//     }
+//   }
+//   reply_data[0] = -1;
+//   return reply;
+// }
+
+
+// Detecting pin
 struct bs_frame_s*
 UART_discover_tx(struct bs_request_s *request)
 {
@@ -430,41 +479,71 @@ UART_discover_tx(struct bs_request_s *request)
   struct bs_frame_s *reply;
   int rxpin, txpin;
   int baudrate;
-
+  
   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 4);
-  if (reply == NULL)
-    return NULL;
+  if (reply == NULL) return NULL;
+  
   reply->bs_payload_length = 4;
   reply_data = (uint32_t *)&reply->bs_payload[0];
   request_args = (uint32_t *)&request->bs_payload[0];
-  rxpin = request_args[0] - 1;
+  
+  rxpin = request_args[0] - 1; 
   baudrate = request_args[1];
-  for (txpin = 1; txpin < N_GPIO; txpin++) {
-    int found;
-    
-    ESP.wdtFeed();
-    
-    if (rxpin == txpin)
-      continue;
-      
-    SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
 
+  for (txpin = 1; txpin < N_GPIO; txpin++) {
+    ESP.wdtFeed();
+    yield(); // <--- Give the OS time to breathe
+    // Skip if it's the pin we are listening ons
+    if (rxpin == txpin) continue;
+    pinMode(gpioIndex[txpin], OUTPUT); // <--- Explicitly claim the pin
+    digitalWrite(gpioIndex[txpin], HIGH); // <--- Idle state for UART is HIGH
+    
+    // Initialize: NodeMCU RX (Fixed), NodeMCU TX (Candidate)
+    SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
     ser.begin(baudrate);
-    while (ser.available()) {
-      ser.read();
-    }
-    found = 1;
-    for (const char *p = "BS"; *p; p++) {
-      if (UART_testtx(&ser, *p) == 0) {
-        found = 0;
-        break;
+    
+    // 1. Flush any noise/garbage from the buffer before probing
+    while (ser.available()) { ser.read(); }
+
+    // 2. Send Probe (Three linefeeds to be sure)
+    ser.print("\r\n\r\n");
+    
+    // 3. Listen Window: Wait up to 500ms for any sign of life
+    unsigned long startWait = millis();
+    bool activityDetected = false;
+    int validChars = 0;
+
+    while (millis() - startWait < 500) {
+      // After sending some text and 3 cr/lf check for good ascii characters from DUT
+      // If 2 or more received from DUT consider the pin in was sent on BUSSide TX
+      if (ser.available() > 0) {
+        int c = ser.read();
+        // Check if the character is printable ASCII or standard whitespace
+        if ((c >= 32 && c <= 126) || c == '\r' || c == '\n') {
+          validChars++;
+        }
+        if (validChars >= 2) { // Require more than 1 char to confirm it's not noise
+          activityDetected = true;
+          break;
+        }
       }
+      ESP.wdtFeed(); // Keep the watchdog happy during the wait
+      // delay(10);     // Small yield
     }
-    if (found) {
+
+    if (activityDetected) {
       reply_data[0] = txpin;
+      ser.end();
+      pinMode(gpioIndex[txpin], INPUT); // Force neutral state
+      delay(1);
       return reply;
     }
+    
+    ser.end();
+    delay(5); // Short delay before next attempt
   }
-  reply_data[0] = -1;
+
+  reply_data[0] = -1; // No pin responded
   return reply;
+  free(reply);
 }

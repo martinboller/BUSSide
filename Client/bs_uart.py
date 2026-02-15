@@ -45,7 +45,7 @@ def uart_tx(rxpin, baudrate):
     if txpin != 0xFFFFFFFF:
         print("+++ FOUND UART TX on GPIO %d" % (txpin + 1))
     else:
-        print("+++ NOT FOUND. Note that GPIO 1 can't be used here.")
+        print("+++ NOT FOUND. Note that GPIO 1 can't be used.")
     print("+++ UART Discovery TX Command Successfully Completed\n")
     return rv
 
