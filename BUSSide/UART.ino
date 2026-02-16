@@ -471,7 +471,7 @@ UART_testtx(SoftwareSerial *ser, int testChar)
 // }
 
 
-// Detecting pin
+// Detecting BUSSide TX pin
 struct bs_frame_s*
 UART_discover_tx(struct bs_request_s *request)
 {
@@ -495,8 +495,8 @@ UART_discover_tx(struct bs_request_s *request)
     yield(); // <--- Give the OS time to breathe
     // Skip if it's the pin we are listening ons
     if (rxpin == txpin) continue;
-    pinMode(gpioIndex[txpin], OUTPUT); // <--- Explicitly claim the pin
-    digitalWrite(gpioIndex[txpin], HIGH); // <--- Idle state for UART is HIGH
+    pinMode(gpioIndex[txpin], OUTPUT); // Explicitly claim the pin
+    digitalWrite(gpioIndex[txpin], HIGH); // Idle state for UART is HIGH
     
     // Initialize: NodeMCU RX (Fixed), NodeMCU TX (Candidate)
     SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
@@ -505,7 +505,7 @@ UART_discover_tx(struct bs_request_s *request)
     // 1. Flush any noise/garbage from the buffer before probing
     while (ser.available()) { ser.read(); }
 
-    // 2. Send Probe (Three linefeeds to be sure)
+    // 2. Send Probe (Two Carriage Return/linefeeds to be sure)
     ser.print("\r\n\r\n");
     
     // 3. Listen Window: Wait up to 500ms for any sign of life
@@ -514,7 +514,7 @@ UART_discover_tx(struct bs_request_s *request)
     int validChars = 0;
 
     while (millis() - startWait < 500) {
-      // After sending some text and 3 cr/lf check for good ascii characters from DUT
+      // After sending 2 cr/lf, check for good ascii characters from DUT
       // If 2 or more received from DUT consider the pin in was sent on BUSSide TX
       if (ser.available() > 0) {
         int c = ser.read();
@@ -522,13 +522,12 @@ UART_discover_tx(struct bs_request_s *request)
         if ((c >= 32 && c <= 126) || c == '\r' || c == '\n') {
           validChars++;
         }
-        if (validChars >= 2) { // Require more than 1 char to confirm it's not noise
+        if (validChars >= 2) { // Require two (or more) chararacters to confirm it's not noise
           activityDetected = true;
           break;
         }
       }
       ESP.wdtFeed(); // Keep the watchdog happy during the wait
-      // delay(10);     // Small yield
     }
 
     if (activityDetected) {

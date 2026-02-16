@@ -74,7 +74,7 @@ Make sure to
 
 ### NodeMCU v3 issues
 
-I had some issues with NodeMCU v3 boards registering as ID 1a86:7523 QinHeng Electronics CH340 serial converter, which conflicts with: 
+I had some issues on Ubuntu (not good ol' Debian) with NodeMCU v3 boards registering as ID 1a86:7523 QinHeng Electronics CH340 serial converter, which conflicts with: 
 
 ``` sh
 # Device: 1A86:7523
@@ -85,3 +85,15 @@ ENV{PRODUCT}=="1a86/7523/*", ENV{BRLTTY_BRAILLE_DRIVER}="bm", GOTO="brltty_usb_r
 ```
 
 edit the /usr/lib/udev/rules.d/85-brltty.rules and comment the last line out, the reboot.
+
+### UART Changes
+Have changed to discover_tx function in uart.ino to send 2 CR+LF's to all pins in succession and listening to a response on the designated RX pin consisting of more than 2 ASCII characters
+
+Discovering RX on the BUSSide (TX on the DUT)
+
+![](/images/discover_rx.png)
+
+
+Then use the obtained information to discover TX on the BUSSide (RX on the DUT)
+
+![](/images/discover_tx.png)
