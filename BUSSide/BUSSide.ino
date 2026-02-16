@@ -180,6 +180,7 @@ loop()
 
     case BS_UART_DISCOVER_TX:
       reply = UART_discover_tx(request);
+      reset_gpios();
       break;
       
     case BS_UART_PASSTHROUGH:
