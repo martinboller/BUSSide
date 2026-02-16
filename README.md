@@ -1,7 +1,7 @@
-# BUSSide (Modernized Fork)
+# BUSSide (Updated Fork)
 License: GPLv3
 
-An automated tool for hardware hacking and bus auditing. This repository is a modernized fork of the original **BUSSide** project developed by **Silvio Cesare**.
+An automated tool for hardware hacking. This repository is a modernized fork of the original **BUSSide** project developed by **Silvio Cesare**.
 
 ## Project Status: 2026 Update ## 
 The original BUSSide was a ground-breaking tool for hardware security researchers. However hasn't been maintained for a while, and dependencies evolved. This fork was created to ensure the tool remains accessible and functional in a modern ecosystem.
@@ -16,12 +16,12 @@ The original BUSSide was a ground-breaking tool for hardware security researcher
 ## Attribution
 **Original Author:** [Silvio Cesare](https://github.com/silviocesare) - [The BUSSide can be found here](https://github.com/BSidesCbr/BUSSide)
 
-Silvio did all the heavy lifting, research, and original implementation of the bus logic. This fork is maintained by [Martin Boller](https://github.com/martinboller) simply to keep the project alive and compatible with modern systems.
+Silvio did all the heavy lifting, research, and original implementation of the bus logic. This fork is maintained by [Martin Boller](https://github.com/martinboller) simply to keep the project alive and running on Python 3 and latest versions of the Arduino IDE.
 
 ---
 
 ## Overview
-BUSSide is designed to interface with various hardware buses to assist in device exploitation and security auditing. It acts as a bridge between your workstation and the target's physical layer.
+BUSSide is designed to interface with various hardware buses to assist in device exploitation and security auditing. It acts as a bridge between your workstation and the target's physical layer using a NodeMCU ESP 8226 v2 (v3 has a different pin layout, but works on a breadboard).
 
 ### Supported Protocols
 | Protocol | Capabilities |
@@ -74,7 +74,7 @@ Make sure to
 
 ### NodeMCU v3 issues
 
-I had some issues on Ubuntu (not good ol' Debian) with NodeMCU v3 boards registering as ID 1a86:7523 QinHeng Electronics CH340 serial converter, which conflicts with: 
+Had some issues on Ubuntu (not good ol' Debian) with NodeMCU v3 boards registering as ID 1a86:7523 QinHeng Electronics CH340 serial converter, which conflicts with: 
 
 ``` sh
 # Device: 1A86:7523
@@ -87,13 +87,13 @@ ENV{PRODUCT}=="1a86/7523/*", ENV{BRLTTY_BRAILLE_DRIVER}="bm", GOTO="brltty_usb_r
 edit the /usr/lib/udev/rules.d/85-brltty.rules and comment the last line out, the reboot.
 
 ### UART Changes
-Have changed to discover_tx function in uart.ino to send 2 CR+LF's to all pins in succession and listening to a response on the designated RX pin consisting of more than 2 ASCII characters
+Have changed to discover_tx function in uart.ino to send 2 CR+LF's to all pins in succession and listening for a response consisting of 2 ASCII characters (or more) on the designated RX pin.
 
-Discovering RX on the BUSSide (TX on the DUT)
+1. Discovering RX on the BUSSide (TX on the DUT)
 
 ![](/images/discover_rx.png)
 
 
-Then use the obtained information to discover TX on the BUSSide (RX on the DUT)
+2. Then use the obtained information to discover TX on the BUSSide (RX on the DUT)
 
 ![](/images/discover_tx.png)
