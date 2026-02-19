@@ -3,9 +3,13 @@
 #include <Boards.h>
 #include <pins_arduino.h>
 #include "BUSSide.h"
-//#include <ESP8266WiFi.h>
+#include <ESP8266WiFi.h>
 
 #define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
+
+// Persistent state for the passthrough mode
+bool passthroughModeActive = false;
+SoftwareSerial* swSerPtr = nullptr;
 
 void reset_gpios();
 
@@ -67,7 +71,7 @@ reset_gpios()
 void
 setup()
 {
-//  WiFi.mode(WIFI_OFF);
+  WiFi.mode(WIFI_OFF);
   reset_gpios();
   Serial.begin(500000);
   while (!Serial);
@@ -124,7 +128,6 @@ loop()
     struct bs_frame_s header;
     struct bs_frame_s *request, *reply;
     int rv;
-
     Serial.setTimeout(1000);
     Sync();
     rv = Serial.readBytes((char *)&header, BS_HEADER_SIZE);
@@ -186,11 +189,11 @@ loop()
     case BS_UART_PASSTHROUGH:
       reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
       if (reply != NULL) {
-        send_reply(request, reply);
-        free(reply);
-        (void)UART_passthrough(request);
-        // no return
-      }
+      //send_reply(request, reply);
+      //sfree(reply);
+      (void)UART_passthrough(request);
+      // no return
+    }
       break;
       
     case BS_I2C_DISCOVER_SLAVES:

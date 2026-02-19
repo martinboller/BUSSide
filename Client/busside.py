@@ -291,8 +291,8 @@ while True:
     except KeyboardInterrupt:
         # User hit Ctrl+C during input OR during doCommand
         reset_terminal()
-        print("\n--- Interrupted. (Type 'quit' or hit Ctrl+D to exit safely)")
-        # We continue here so a stray Ctrl+C doesn't kill your whole session
+        print("+++ Interrupted. (Type 'quit' or hit Ctrl+D to exit safely)")
+        # We continue here so a stray Ctrl+C doesn't kill the session
         continue 
     except EOFError:
         # User hit Ctrl+D
@@ -303,7 +303,8 @@ while True:
         continue
 # The single, clean exit point
 print("Cleaning up and exiting... Ciao!")
-# If you are using a history file, it saves automatically here if using atexit
+reset_terminal()
+# Saves history and seq files automatically here if using sys.exit
 sys.exit(0)
 
 # Turn off LED blinking when exiting normally (not quit)

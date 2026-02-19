@@ -106,7 +106,7 @@ def uart_passthrough(gpiorx, gpiotx, baudrate):
     # But since your 'bs' module is already loaded, let's use its serial port directly.
     ser = bs.getSerial()
     
-    print(f"+++ Forcing Bridge Entry: RX={rx_idx}, TX={tx_idx}, @{baudrate}")
+    print(f"+++ Forcing Bridge Entry: RX={gpiorx}, TX={gpiotx}, @{baudrate}")
     
     # We use the internal request-reply but we force it to stop after one try
     # by setting a very short timeout and catching the error.
@@ -122,7 +122,7 @@ def uart_passthrough(gpiorx, gpiotx, baudrate):
     
     # 4. Robust Terminal Loop
     bs.keys_init()
-    print("--- TERMINAL OPEN (Press Ctrl+C to exit) ---")
+    print("+++ Terminal Started (Press CTRL+X then Ctrl+C to exit)")
     try:
         while True:
             if ser.in_waiting > 0:
@@ -131,6 +131,13 @@ def uart_passthrough(gpiorx, gpiotx, baudrate):
                 # without the script crashing on encoding errors.
                 sys.stdout.write(raw.decode("latin-1", errors="replace"))
                 sys.stdout.flush()
+                # Add a small buffer to check for the exit string
+                line_buffer = ""
+                for char in raw.decode("latin-1", errors="replace"):
+                    line_buffer += char
+                    if "BUSSIDE_EXIT_UART_PASSTHROUGH" in line_buffer:
+                        print("\n[!] Device signaled exit. Returning to BUSSide...")
+                        return
 
             char = bs.keys_getchar()
             if char is not None:

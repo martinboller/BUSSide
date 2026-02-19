@@ -1,6 +1,10 @@
 #include <pins_arduino.h>
 #include "BUSSide.h"
 #include <SoftwareSerial.h>
+#include <SoftwareSerial.h>
+
+// Declare this globally so it doesn't live on the stack
+static SoftwareSerial* globalSer = nullptr;
 
 //#define min(a,b) (((a)<(b))?(a):(b))
 
@@ -372,55 +376,113 @@ data_discovery(struct bs_request_s *request)
   return reply;
 }
 
+// struct bs_frame_s*
+// UART_passthrough(struct bs_request_s *request)
+// {
+//   uint32_t *request_args;
+//   int rxpin, txpin;
+//   int baudrate;
 
-struct bs_frame_s*
-UART_passthrough(struct bs_request_s *request)
-{
-  uint32_t *request_args;
-  int rxpin, txpin;
-  int baudrate;
-
-  request_args = (uint32_t *)&request->bs_payload[0];
-  rxpin = request_args[0];
-  txpin = request_args[1];
-  baudrate = request_args[2];
-  SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
-  ser.begin(baudrate);
-  while (1) {
-    ESP.wdtFeed();
+//   request_args = (uint32_t *)&request->bs_payload[0];
+//   rxpin = request_args[0];
+//   txpin = request_args[1];
+//   baudrate = request_args[2];
+//   SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
+//   ser.begin(baudrate);
+//   while (1) {
+//     ESP.wdtFeed();
     
-    while (ser.available() > 0) {
-      Serial.write(ser.read());
-      yield();
+//     while (ser.available() > 0) {
+//       Serial.write(ser.read());
+//       yield();
+//     }
+
+//     while (Serial.available() > 0) {
+//       ser.write(Serial.read());
+//       yield();
+//       ESP.wdtFeed();
+//     }
+//   }
+//   return NULL;
+// }
+
+//updated passthrough
+// struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
+//     uint32_t *request_args = (uint32_t *)&request->bs_payload[0];
+//     int rx = gpioIndex[request_args[0]];
+//     int tx = gpioIndex[request_args[1]];
+//     int baud = request_args[2];
+
+//     // Safety: Abort if using Flash Pins GPIO 6-11
+//     if (rx >= 6 && rx <= 11 || tx >= 6 && tx <= 11) return NULL;
+
+//     if (swSerPtr) { swSerPtr->end(); delete swSerPtr; }
+
+//     // Allocate on Heap for stack safety
+//     swSerPtr = new SoftwareSerial(rx, tx, false);
+//     swSerPtr->begin(baud);
+    
+//     // Enable the "Forever" state
+//     passthroughModeActive = true;
+
+//     // Send the success reply so the Python client opens the terminal
+//     struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
+//     if (reply) {
+//         memcpy(reply, request, BS_HEADER_SIZE);
+//         reply->bs_command = BS_REPLY_UART_PASSTHROUGH;
+//         send_reply(request, reply);
+//         free(reply);
+//     }
+    
+//     // We return NULL because we've already sent the reply manually
+//     return NULL; 
+// }
+
+struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
+    uint32_t *request_args = (uint32_t *)&request->bs_payload[0];
+    int rx = gpioIndex[request_args[0]];
+    int tx = gpioIndex[request_args[1]];
+    int baud = request_args[2];
+
+    // Clean up and Start
+    if (swSerPtr) { swSerPtr->end(); delete swSerPtr; }
+    swSerPtr = new SoftwareSerial(rx, tx, false);
+    swSerPtr->begin(baud);
+
+    // Send the "OK" to Python so the terminal opens
+    struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
+    if (reply) {
+        memcpy(reply, request, BS_HEADER_SIZE);
+        reply->bs_command = BS_REPLY_UART_PASSTHROUGH;
+        send_reply(request, reply);
+        Serial.flush(); 
+        free(reply);
     }
 
-    while (Serial.available() > 0) {
-      ser.write(Serial.read());
-      yield();
-      ESP.wdtFeed();
-    }
-  }
-  return NULL;
-}
+    // LOCKDOWN LOOP
+    while (true) {
+        if (swSerPtr->available()) {
+            Serial.write(swSerPtr->read());
+        }
 
-int
-UART_testtx(SoftwareSerial *ser, int testChar)
-{
-  ser->write(testChar);
-  for (int i = 0; i < 10000; i++) {
-    ESP.wdtFeed();
-    if (ser->available() > 0) {
-      int ch;
-      
-      ch = ser->read();
-      if (ch == testChar)
-        return 1;
-      else
-        return 0;
+        if (Serial.available()) {
+            byte c = Serial.read();
+            
+            // ESCAPE SEQUENCE: Ctrl+X (ASCII 24)
+            if (c == 24) {
+                Serial.println(F("BUSSIDE_EXIT_REBOOT"));
+                Serial.flush();
+                delay(500);
+                ESP.restart(); // This is the only 100% reliable way to clear interrupts
+            }
+            
+            swSerPtr->write(c);
+        }
+        // Keep the system from crashing
+        yield();
     }
-    delay_us(50);
-  }
-  return 0;
+    
+    return NULL; // Never reached
 }
 
 // Original
