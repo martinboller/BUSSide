@@ -189,8 +189,6 @@ loop()
     case BS_UART_PASSTHROUGH:
       reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
       if (reply != NULL) {
-      //send_reply(request, reply);
-      //sfree(reply);
       (void)UART_passthrough(request);
       // no return
     }

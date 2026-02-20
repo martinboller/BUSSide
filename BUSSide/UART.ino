@@ -376,68 +376,6 @@ data_discovery(struct bs_request_s *request)
   return reply;
 }
 
-// struct bs_frame_s*
-// UART_passthrough(struct bs_request_s *request)
-// {
-//   uint32_t *request_args;
-//   int rxpin, txpin;
-//   int baudrate;
-
-//   request_args = (uint32_t *)&request->bs_payload[0];
-//   rxpin = request_args[0];
-//   txpin = request_args[1];
-//   baudrate = request_args[2];
-//   SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
-//   ser.begin(baudrate);
-//   while (1) {
-//     ESP.wdtFeed();
-    
-//     while (ser.available() > 0) {
-//       Serial.write(ser.read());
-//       yield();
-//     }
-
-//     while (Serial.available() > 0) {
-//       ser.write(Serial.read());
-//       yield();
-//       ESP.wdtFeed();
-//     }
-//   }
-//   return NULL;
-// }
-
-//updated passthrough
-// struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
-//     uint32_t *request_args = (uint32_t *)&request->bs_payload[0];
-//     int rx = gpioIndex[request_args[0]];
-//     int tx = gpioIndex[request_args[1]];
-//     int baud = request_args[2];
-
-//     // Safety: Abort if using Flash Pins GPIO 6-11
-//     if (rx >= 6 && rx <= 11 || tx >= 6 && tx <= 11) return NULL;
-
-//     if (swSerPtr) { swSerPtr->end(); delete swSerPtr; }
-
-//     // Allocate on Heap for stack safety
-//     swSerPtr = new SoftwareSerial(rx, tx, false);
-//     swSerPtr->begin(baud);
-    
-//     // Enable the "Forever" state
-//     passthroughModeActive = true;
-
-//     // Send the success reply so the Python client opens the terminal
-//     struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
-//     if (reply) {
-//         memcpy(reply, request, BS_HEADER_SIZE);
-//         reply->bs_command = BS_REPLY_UART_PASSTHROUGH;
-//         send_reply(request, reply);
-//         free(reply);
-//     }
-    
-//     // We return NULL because we've already sent the reply manually
-//     return NULL; 
-// }
-
 struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
     uint32_t *request_args = (uint32_t *)&request->bs_payload[0];
     int rx = gpioIndex[request_args[0]];
@@ -484,54 +422,6 @@ struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
     
     return NULL; // Never reached
 }
-
-// Original
-// struct bs_frame_s*
-// UART_discover_tx(struct bs_request_s *request)
-// {
-//   uint32_t *request_args, *reply_data;
-//   struct bs_frame_s *reply;
-//   int rxpin, txpin;
-//   int baudrate;
-
-//   reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 4);
-//   if (reply == NULL)
-//     return NULL;
-//   reply->bs_payload_length = 4;
-//   reply_data = (uint32_t *)&reply->bs_payload[0];
-//   request_args = (uint32_t *)&request->bs_payload[0];
-//   rxpin = request_args[0] - 1;
-//   baudrate = request_args[1];
-//   for (txpin = 1; txpin < N_GPIO; txpin++) {
-//     int found;
-    
-//     ESP.wdtFeed();
-    
-//     if (rxpin == txpin)
-//       continue;
-      
-//     SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
-
-//     ser.begin(baudrate);
-//     while (ser.available()) {
-//       ser.read();
-//     }
-//     found = 1;
-//     for (const char *p = "BS"; *p; p++) {
-//       if (UART_testtx(&ser, *p) == 0) {
-//         found = 0;
-//         break;
-//       }
-//     }
-//     if (found) {
-//       reply_data[0] = txpin;
-//       return reply;
-//     }
-//   }
-//   reply_data[0] = -1;
-//   return reply;
-// }
-
 
 // Detecting BUSSide TX pin
 struct bs_frame_s*

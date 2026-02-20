@@ -26,24 +26,24 @@ history_path = os.path.expanduser("~/.BUSSide/history")
 # define squence number file path
 sequence_file_path = os.path.expanduser("~/.BUSSide/sequence")
 
-# 1. Load history if it exists
+# Load history if it exists
 if os.path.exists(history_path):
     try:
         readline.read_history_file(history_path)
     except Exception:
         print("--- Warning: Could not read history file.")
 
-# 2. Define the save function
+# Save function
 def save_history():
     try:
         readline.write_history_file(history_path)
     except Exception as e:
         print(f"--- Warning: Could not save history: {e}")
 
-# 3. Register the save function to run AUTOMATICALLY on exit
+# Register the save function to run AUTOMATICALLY on exit
 atexit.register(save_history)
 
-# Define the command hierarchy
+# Define the BUSSide command hierarchy for tab completion
 COMMAND_TREE = {
      'i2c': {
         'discover': ['pinout'],
@@ -94,13 +94,13 @@ def completer(text, state):
     buffer = readline.get_line_buffer()
     parts = buffer.lstrip().split()
     
-    # If the buffer ends in a space, we are looking for the NEXT word
+    # If the buffer ends in a space, look for the NEXT word
     if buffer.endswith(' '):
         parts.append('')
 
     node = COMMAND_TREE
     
-    # Navigate the tree based on parts already typed
+    # Navigate the tree based on what is typed
     for i in range(len(parts) - 1):
         word = parts[i]
         if isinstance(node, dict):
@@ -112,7 +112,7 @@ def completer(text, state):
             else:
                 return None
         elif isinstance(node, list):
-            # We've reached a terminal list of options/hints
+            # mo more options/hints
             return None
         else:
             return None
@@ -128,13 +128,13 @@ def completer(text, state):
         return options[state]
     return None
 
+# Register the completer function with readline
 readline.set_completer(completer)
 readline.parse_and_bind("tab: complete")
 
 from click import command
 # Ensure the Client/ directory is on sys.path when running from repo root
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "Client"))
-
 
 sequence_number = 5
 
@@ -204,8 +204,8 @@ def reset_terminal():
     printHelp()
 
 def doCommand(command):
-    # STEP 1: Check for quit, exit or help immediately
-    # This prevents the print(), device reset, and the hardware sync from ever running
+    # Check for quit, exit or help as the first step before doing anything else.
+    # This prevents the printhelp, device reset, and the hardware sync from ever running
     if command.strip().lower() in ["quit", "exit"]:
         return -1
     
@@ -213,11 +213,11 @@ def doCommand(command):
         printHelp()
         return True # Return True so the main loop knows it was handled
 
-    # 2. Hardware Commands (Reset + Sync)
-    #print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
+    # Hardware Commands (Reset + Sync)
+    print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
     
     # Trigger the hardware reset
-    #bs.ResetDevice()
+    bs.ResetDevice()
 
     # Perform the handshake
     bs.FlushInput()
@@ -227,8 +227,6 @@ def doCommand(command):
     if sync_result is None:
         print("--- Error: Device failed to sync after reset.")
         return None
-    # STEP 2: Now that we know it's a real command, perform sync
-    # print("+++ Syncing with BUSSide before command execution...")
     bs.FlushInput()
     bs.NewTimeout(30)
 
@@ -266,22 +264,19 @@ if rv is None:
 
 # print("+++")
 print("+++ Welcome to the BUSSide")
-# print("+++ By Dr Silvio Cesare of InfoSect")
-# print("+++")
 printHelp()
-# print("+++")
 
 while True:
     try:
-        # 1. Capture the input
+        # Capture the input
         command = input("BUSSide> ").strip()
         if not command:
             continue
             
-        # 2. Execute
+        # Execute
         rv = doCommand(command)
 
-        # 3. Evaluate return value
+        # Evaluate return value
         if rv is None:
             printHelp()
         elif rv == -1:
@@ -292,7 +287,7 @@ while True:
         # User hit Ctrl+C during input OR during doCommand
         reset_terminal()
         print("+++ Interrupted. (Type 'quit' or hit Ctrl+D to exit safely)")
-        # We continue here so a stray Ctrl+C doesn't kill the session
+        # Continue so a stray Ctrl+C doesn't kill the session
         continue 
     except EOFError:
         # User hit Ctrl+D
@@ -310,4 +305,3 @@ sys.exit(0)
 # Turn off LED blinking when exiting normally (not quit)
 bs.set_led_blink(0)
 print("Ciao!")
-

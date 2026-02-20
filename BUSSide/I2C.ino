@@ -64,7 +64,6 @@ read_I2C_eeprom(struct bs_request_s *request)
   return reply;
 }
 
-
 int
 write_byte_I2C_eeprom(uint8_t slaveAddress, uint32_t skipsize, int addressLength, uint32_t val)
 {
@@ -147,19 +146,17 @@ static void I2C_active_scan1(struct bs_request_s *request, struct bs_frame_s *re
     int sdaGPIO = gpioIndex[sdaPin];
     int sclGPIO = gpioIndex[sclPin];
 
-    // 1. SAFETY CHECK: Ensure lines aren't physically shorted to GND
-    // We use pullups and check if the pins actually go HIGH.
     pinMode(sdaGPIO, INPUT_PULLUP);
     pinMode(sclGPIO, INPUT_PULLUP);
     delayMicroseconds(50); 
     
     if (digitalRead(sdaGPIO) == LOW || digitalRead(sclGPIO) == LOW) {
         // Line is stuck LOW (hardware issue or no pullup). 
-        // We MUST skip this pair to avoid a library hang.
+        // skip this pair to avoid a library hang.
         return; 
     }
 
-    // 2. INITIALIZE WIRE
+    // INITIALIZE WIRE
     Wire.begin(sdaGPIO, sclGPIO);  
     Wire.setClock(100000);
     
@@ -177,7 +174,7 @@ static void I2C_active_scan1(struct bs_request_s *request, struct bs_frame_s *re
         }
     }
 
-    // 3. LOG SUCCESSFUL PIN PAIR
+    // LOG SUCCESSFUL PIN PAIR
     if (found) {
         int index = reply->bs_payload_length / 8; 
         if (index < MAX_ENTRIES) {
@@ -188,7 +185,7 @@ static void I2C_active_scan1(struct bs_request_s *request, struct bs_frame_s *re
         }
     }
     
-    // 4. CLEANUP: Reset pins to floating input state
+    // Reset pins to floating input state
     // This prevents the I2C hardware logic from "locking" the pins
     pinMode(sdaGPIO, INPUT);
     pinMode(sclGPIO, INPUT);

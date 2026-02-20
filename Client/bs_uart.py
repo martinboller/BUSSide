@@ -96,19 +96,17 @@ def uart_rx():
 
 
 def uart_passthrough(gpiorx, gpiotx, baudrate):
-    # 1. Convert indices (1-based to 0-based)
+    # Convert indices (1-based to 0-based)
     rx_idx = int(gpiorx) - 1
     tx_idx = int(gpiotx) - 1
     if tx_idx < 0 or tx_idx > 250: tx_idx = 255
     
-    # 2. Manual Packet Construction (The "Blind" Way)
-    # Most BUSSide commands follow: [0xAA, 0x55, CMD_ID, LEN, ARG1, ARG2, ARG3, CSUM]
-    # But since your 'bs' module is already loaded, let's use its serial port directly.
+    # Use bs serial port directly.
     ser = bs.getSerial()
     
     print(f"+++ Forcing Bridge Entry: RX={gpiorx}, TX={gpiotx}, @{baudrate}")
     
-    # We use the internal request-reply but we force it to stop after one try
+    # Internal request-reply but force it to stop after one try
     # by setting a very short timeout and catching the error.
     bs.NewTimeout(1)
     try:
@@ -116,19 +114,17 @@ def uart_passthrough(gpiorx, gpiotx, baudrate):
     except:
         pass # Ignore the timeout/sync error
     
-    # 3. Stabilize
+    # Breathe and stabilize
     time.sleep(0.5)
     ser.reset_input_buffer()
     
-    # 4. Robust Terminal Loop
+    # Terminal Loop
     bs.keys_init()
     print("+++ Terminal Started (Press CTRL+X then Ctrl+C to exit)")
     try:
         while True:
             if ser.in_waiting > 0:
                 raw = ser.read(ser.in_waiting)
-                # Latin-1 allows us to see the 'garbage' bytes clearly 
-                # without the script crashing on encoding errors.
                 sys.stdout.write(raw.decode("latin-1", errors="replace"))
                 sys.stdout.flush()
                 # Add a small buffer to check for the exit string
