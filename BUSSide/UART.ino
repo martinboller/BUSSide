@@ -4,17 +4,17 @@
 #include <SoftwareSerial.h>
 
 // Declare this globally so it doesn't live on the stack
-static SoftwareSerial* globalSer = nullptr;
+static IRAM_ATTR SoftwareSerial* globalSer = nullptr;
 
 //#define min(a,b) (((a)<(b))?(a):(b))
 
-uint32_t usTicks = 0;
+uint32_t IRAM_ATTR usTicks = 0;
 
-static int gpioVal[N_GPIO];
+static int IRAM_ATTR gpioVal[N_GPIO];
 
 #define sampleTx(pin) digitalRead(pin)
 
-struct uartInfo_s {
+struct IRAM_ATTR uartInfo_s {
   int baudRate;
   float microsDelay;
 } uartInfo[] = {
@@ -31,9 +31,9 @@ struct uartInfo_s {
   { 0, 0 },
 };
 
-static int uartSpeedIndex;
+static int IRAM_ATTR uartSpeedIndex;
 
-static unsigned int findNumberOfUartSpeeds(void)
+static unsigned int IRAM_ATTR findNumberOfUartSpeeds(void)
 {
   unsigned int i;
 
@@ -41,7 +41,7 @@ static unsigned int findNumberOfUartSpeeds(void)
   return i;
 }
 
-static int waitForIdle(int pin)
+static int IRAM_ATTR waitForIdle(int pin)
 {
   unsigned long startTime;
   unsigned long bitTime10;
@@ -50,7 +50,7 @@ static int waitForIdle(int pin)
   beginTime = asm_ccount();
   bitTime10 = uartInfo[uartSpeedIndex].microsDelay * 10.0;
 start:
-  ESP.wdtFeed();
+  system_soft_wdt_feed();
   if ((uint32_t)(asm_ccount() - beginTime)/FREQ >= 10*1000000)
     return 1;
   startTime = microsTime();
@@ -62,7 +62,7 @@ start:
   return 0;
 }
 
-static int buildwidths(int pin, int *widths, int nwidths)
+static int IRAM_ATTR buildwidths(int pin, int *widths, int nwidths)
 {
   int val;
   int32_t startTime;
@@ -77,7 +77,7 @@ static int buildwidths(int pin, int *widths, int nwidths)
     int32_t newStartTime;
 
     do {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       curVal = sampleTx(pin);
     } while (curVal == val && (uint32_t)(asm_ccount() - startTime)/FREQ < 5*1000000);
     if (curVal == val)
@@ -91,7 +91,7 @@ static int buildwidths(int pin, int *widths, int nwidths)
   return 0;
 }
 
-static unsigned int findminwidth(int *widths, int nwidths)
+static unsigned int IRAM_ATTR findminwidth(int *widths, int nwidths)
 {
   int minIndex1;
   unsigned int min1;
@@ -124,7 +124,7 @@ static float autobaud(int pin, int *widths, int nwidths)
 
 static int tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
 {
-  float width_timepos = 0.0;
+  float width_timepos = 0.05;
   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
   float stopTime = bitTime*((float)framesize - (float)stopbits + 0.5);
   float frameTime = bitTime*(float)framesize;
@@ -231,15 +231,16 @@ static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
   return 0;
 }
 
-static int frameSize;
-static int stopBits;
-static int dataBits;
-static int parity;
+static int IRAM_ATTR frameSize;
+static int IRAM_ATTR stopBits;
+static int IRAM_ATTR dataBits;
+static int IRAM_ATTR parity;
 static float bitTime;
 
 #define NWIDTHS 200
 
-static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
+static int IRAM_ATTR
+UART_line_settings_direct(struct bs_reply_s *reply, int index)
 {
   int widths[NWIDTHS];
   char s[100];
@@ -266,11 +267,11 @@ static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
   bitTime = uartInfo[uartSpeedIndex].microsDelay;
 
   frameSize = -1;
-  for (int i = 7; i < 14; i++) {
-    if (tryFrameSize(i, 1, widths, NWIDTHS)) {
-      frameSize = i;
-      break;
-    }
+    for (int i = 7; i < 14; i++) {
+      if (tryFrameSize(i, 1, widths, NWIDTHS)) {
+        frameSize = i;
+        break;
+      }
   }
   if (frameSize < 0) {
     return -1;
@@ -300,11 +301,11 @@ static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
   reply_data[index*5 + 2] = stopBits;
   reply_data[index*5 + 3] = parity;
   reply_data[index*5 + 4] = uartInfo[uartSpeedIndex].baudRate;
-
+  yield();
   return 0;
 }
 
-struct bs_frame_s*
+struct bs_frame_s* IRAM_ATTR
 UART_all_line_settings(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
@@ -321,7 +322,7 @@ UART_all_line_settings(struct bs_request_s *request)
       for (int attempt = 0; attempt < 50; attempt++) {
         int ret;
 
-        ESP.wdtFeed();
+        system_soft_wdt_feed();
         ret = UART_line_settings_direct(reply, i);
         if (ret == 0) {
           u++;
@@ -334,10 +335,11 @@ UART_all_line_settings(struct bs_request_s *request)
       }
     }
   }
+  yield();
   return reply;
 }
 
-struct bs_frame_s*
+struct IRAM_ATTR bs_frame_s*
 data_discovery(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
@@ -358,7 +360,7 @@ data_discovery(struct bs_request_s *request)
     gpioVal[i] = sampleTx(gpioIndex[i]);
   }
   do {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     for (int i = 0; i < N_GPIO; i++) {
       int curVal;
       
@@ -373,6 +375,7 @@ data_discovery(struct bs_request_s *request)
   for (int i = 0; i < N_GPIO; i++) {
     reply_data[i] = gpio[i];
   }
+  yield();
   return reply;
 }
 
@@ -424,7 +427,7 @@ struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
 }
 
 // Detecting BUSSide TX pin
-struct bs_frame_s*
+struct IRAM_ATTR bs_frame_s*
 UART_discover_tx(struct bs_request_s *request)
 {
   uint32_t *request_args, *reply_data;
@@ -443,7 +446,7 @@ UART_discover_tx(struct bs_request_s *request)
   baudrate = request_args[1];
 
   for (txpin = 1; txpin < N_GPIO; txpin++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     yield(); // <--- Give the OS time to breathe
     // Skip if it's the pin we are listening ons
     if (rxpin == txpin) continue;
@@ -479,7 +482,7 @@ UART_discover_tx(struct bs_request_s *request)
           break;
         }
       }
-      ESP.wdtFeed(); // Keep the watchdog happy during the wait
+      system_soft_wdt_feed(); // Keep the watchdog happy during the wait
     }
 
     if (activityDetected) {

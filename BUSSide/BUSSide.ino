@@ -4,6 +4,9 @@
 #include <pins_arduino.h>
 #include "BUSSide.h"
 #include <ESP8266WiFi.h>
+// To allow even lower (closer to the metal) feed of software watchdog, by calling the underlying Espressif SDK - using system_soft_wdt_feed();
+// to save more resources than ESP.wdtfeed
+#include "user_interface.h"
 
 #define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
 
@@ -71,7 +74,10 @@ reset_gpios()
 void
 setup()
 {
+  WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
+  WiFi.forceSleepBegin();
+  delay(1);
   reset_gpios();
   Serial.begin(500000);
   while (!Serial);
@@ -109,7 +115,7 @@ static void Sync() {
         // Look ahead for the second byte with a small blocking window
         uint32_t start = millis();
         while (Serial.available() == 0 && (millis() - start < 20)) {
-          ESP.wdtFeed(); // Keep system alive while waiting for 0xCA
+          system_soft_wdt_feed(); // Keep system alive while waiting for 0xCA
         }
         
         if (Serial.available() > 0 && Serial.read() == 0xca) {
@@ -117,7 +123,7 @@ static void Sync() {
         }
       }
     }
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     yield();
   }
 }

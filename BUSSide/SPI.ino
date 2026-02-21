@@ -10,7 +10,7 @@ static uint8_t spi_transfer_byte(int spispeed, int gpio_CS, int gpio_CLK, int gp
 {
   uint8_t x = 0;
 
-  ESP.wdtFeed();
+  system_soft_wdt_feed();
   digitalWrite(gpio_CLK, LOW);
   
   for (int i = 0x80; i; i >>= 1) {
@@ -301,7 +301,7 @@ hw_send_SPI_command(struct bs_request_s *request)
   digitalWrite(CS_GPIO, LOW);
   for (int i = 0 ; i < cmdsize; i++) {
     data[i] = SPI.transfer(cmd[i]);
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
   }
   digitalWrite(CS_GPIO, HIGH);
   SPI.endTransaction();
@@ -416,7 +416,7 @@ read_SPI_flash(struct bs_request_s *request)
   (void)SPI.transfer((skipsize & 0x0000ff));
   for (int i = 0 ; i < readsize; i++) {
     data[i] = SPI.transfer(0x00);
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
   }
   digitalWrite(CS_GPIO, HIGH);
   SPI.endTransaction();
@@ -637,7 +637,7 @@ write_SPI_flash(struct bs_request_s *request)
   (void)SPI.transfer((skipsize & 0x0000ff));
   for (int i = 0 ; i < 256; i++, writesize--) {
     SPI.transfer(data[i]);
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
   }
   digitalWrite(CS_GPIO, HIGH);
   delay(3);
@@ -681,7 +681,7 @@ read_SPI_flash_bitbang(struct bs_request_s *request)
   (void)spi_transfer_byte(spispeed, gpioIndex[cs], gpioIndex[clk], gpioIndex[mosi], gpioIndex[miso], (skipsize & 0x0000ff));
   for (int i = 0 ; i < readsize; i++) {
     data[i] = spi_transfer_byte(spispeed, gpioIndex[cs], gpioIndex[clk], gpioIndex[mosi], gpioIndex[miso], 0x00);
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
   }
   digitalWrite(gpioIndex[cs], HIGH);
   pinMode(gpioIndex[cs], INPUT);

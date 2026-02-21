@@ -81,7 +81,7 @@ tap_state(const char tap_state[], int tck, int tms)
   Serial.print("tap_state: tms set to: ");
 #endif
   while (*tap_state) { // exit when string \0 terminator encountered
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     if (DELAY) delayMicroseconds(50);
     digitalWrite(pins[tck], LOW);          
     digitalWrite(pins[tms], *tap_state - '0'); // conv from ascii pattern
@@ -101,7 +101,7 @@ JTAG_clock(int tck, int tms, int tdi, int tdo, int tms_state, int tdi_state)
 {
   int tdo_state;
 
-  ESP.wdtFeed();
+  system_soft_wdt_feed();
   if (DELAY) delayMicroseconds(50);
   digitalWrite(pins[tck], LOW);
   digitalWrite(pins[tms], tms_state);
@@ -118,7 +118,7 @@ JTAG_read32(int tck, int tms, int tdi, int tdo)
 
   r = 0;
   for (int i = 0; i < 32; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     r |= (JTAG_clock(tck, tms, tdi, tdo, 0, 0) << i);
   }
   return r;
@@ -132,7 +132,7 @@ JTAG_ndevices(int tck, int tms, int tdi, int tdo)
   
   // go to reset state
   for(i=0; i<5; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     JTAG_clock(tck, tms, tdi, tdo, 1, 0);
   }
 
@@ -146,7 +146,7 @@ JTAG_ndevices(int tck, int tms, int tdi, int tdo)
   // Send plenty of ones into the IR registers
   // That makes sure all devices are in BYPASS!
   for(i=0; i<999; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     JTAG_clock(tck, tms, tdi, tdo, 0, 1);
   }
 
@@ -160,13 +160,13 @@ JTAG_ndevices(int tck, int tms, int tdi, int tdo)
 
   // Send plenty of zeros into the DR registers to flush them
   for(i=0; i<1000; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     JTAG_clock(tck, tms, tdi, tdo, 0, 0);
   }
 
   // now send ones until we receive one back
   for(i=0; i<1000; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     if(JTAG_clock(tck, tms, tdi, tdo, 0, 1)) break;
   }
 
@@ -229,7 +229,7 @@ pulse_tdo(int tck, int tdo)
 void
 init_pins(int tck = IGNOREPIN, int tms = IGNOREPIN, int tdi = IGNOREPIN, int ntrst = IGNOREPIN) 
 { 
-  ESP.wdtFeed();
+  system_soft_wdt_feed();
   // default all to INPUT state
   for (int i = 0; i < pinslen; i++) {
     if (pins[i] == D0)
@@ -279,7 +279,7 @@ check_data(char pattern[], int iterations, int tck, int tdi, int tdo, int *reg_l
   tdo_prev = '0' + (digitalRead(pins[tdo]) == HIGH);
 
   for(i = 0; i < iterations; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
        
     /* output pattern and incr write index */
     pulse_tdi(tck, tdi, pattern[w++] - '0');
@@ -350,21 +350,21 @@ scan(int *tck_pin, int *tms_pin, int *tdi_pin, int *tdo_pin, int *ntrst_pin)
 //  Serial.println(pattern);
   const int MAX_PIN = 8; // Limit to pins 0-7 for faster discovery
   for(ntrst=0;ntrst<MAX_PIN;ntrst++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     for(tck=0;tck<MAX_PIN;tck++) {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       if(tck == ntrst) continue;
       for(tms=0;tms<MAX_PIN;tms++) {
-        ESP.wdtFeed();
+        system_soft_wdt_feed();
         if(tms == ntrst) continue;
         if(tms == tck  ) continue;
         for(tdo=0;tdo<MAX_PIN;tdo++) {
-          ESP.wdtFeed();
+          system_soft_wdt_feed();
           if(tdo == ntrst) continue;
           if(tdo == tck  ) continue;
           if(tdo == tms  ) continue;
           for(tdi=0;tdi<MAX_PIN;tdi++) {
-            ESP.wdtFeed();
+            system_soft_wdt_feed();
             if(tdi == ntrst) continue;
             if(tdi == tck  ) continue;
             if(tdi == tms  ) continue;
@@ -423,7 +423,7 @@ loopback_check()
 
   for(tdo=0;tdo<pinslen;tdo++) {
     for(tdi=0;tdi<pinslen;tdi++) {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       if(tdi == tdo) continue;
   
       if(VERBOSE) {
@@ -497,21 +497,21 @@ scan_idcode()
   int idcode_i = 31; // TODO: artifact that might need to be configurable
   uint32_t idcode;
   for(ntrst=0;ntrst<pinslen;ntrst++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     for(tck=0;tck<pinslen;tck++) {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       if(tck == ntrst) continue;
       for(tms=0;tms<pinslen;tms++) {
-        ESP.wdtFeed();
+        system_soft_wdt_feed();
         if(tms == ntrst) continue;
         if(tms == tck  ) continue;
         for(tdo=0;tdo<pinslen;tdo++) {
-          ESP.wdtFeed();
+          system_soft_wdt_feed();
           if(tdo == ntrst) continue;
           if(tdo == tck  ) continue;
           if(tdo == tms  ) continue;
           for(tdi=0;tdi<pinslen;tdi++) {
-            ESP.wdtFeed();
+            system_soft_wdt_feed();
             if(tdi == ntrst) continue;
             if(tdi == tck  ) continue;
             if(tdi == tms  ) continue;
@@ -530,7 +530,7 @@ scan_idcode()
             for(i = 0; i < MAX_DEV_NR; i++) {
               idcodes[i] = 0;
               for(j = 0; j < IDCODE_LEN;j++) {
-                ESP.wdtFeed();
+                system_soft_wdt_feed();
                 /* we send '0' in */
                 pulse_tdi(tck, tdi, 0);
                 tdo_read = digitalRead(pins[tdo]);
@@ -575,12 +575,12 @@ shift_bypass()
   int reg_len;
 
   for(tck=0;tck<pinslen;tck++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     for(tdi=0;tdi<pinslen;tdi++) {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       if(tdi == tck) continue;
       for(tdo=0;tdo<pinslen;tdo++) {
-        ESP.wdtFeed();
+        system_soft_wdt_feed();
         if(tdo == tck) continue;
         if(tdo == tdi) continue;
         if(VERBOSE) {
@@ -641,7 +641,7 @@ ir_state(const char state[], int tck, int tms, int tdi)
   Serial.print("ir_state: pulse_tdi to: ");
 #endif
   for (int i=0; i < IR_LEN; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     if (DELAY) delayMicroseconds(50);
     // TAP/TMS changes to Exit IR state (1) must be executed
     // at same time that the last TDI bit is sent:
@@ -676,7 +676,7 @@ sample(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN)
   // is determined by the instruction we sent, in our case 
   // SAMPLE/boundary scan
   for (int i = 0; i < iterations; i++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     // no need to set TMS. It's set to the '0' state to 
     // force a Shift DR by the TAP
  //   Serial.print(pulse_tdo(tck, tdo),DEC);
@@ -694,7 +694,7 @@ brute_ir(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN
   byte tdo_read;
   byte prevread;
   for (uint32_t ir = 0; ir < (1UL << IR_LEN); ir++) { 
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     iractive=0;
     // send instruction and go to ShiftDR (ir_state() does this already)
     // convert ir to string.
@@ -706,7 +706,7 @@ brute_ir(int iterations, int tck, int tms, int tdi, int tdo, int ntrst=IGNOREPIN
 
     prevread = pulse_tdo(tck, tdo);
     for (int i = 0; i < iterations-1; i++) {
-      ESP.wdtFeed();
+      system_soft_wdt_feed();
       // no need to set TMS. It's set to the '0' state to force a Shift DR by the TAP
       tdo_read = pulse_tdo(tck, tdo);
       if (tdo_read != prevread) iractive++;

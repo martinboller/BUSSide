@@ -132,7 +132,7 @@ write_I2C_eeprom(struct bs_request_s *request)
     }
     skipsize++;
     writesize--;
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
   }
   reply->bs_payload_length = request_args[1];
   return reply;
@@ -201,7 +201,7 @@ struct bs_frame_s* I2C_active_scan(struct bs_request_s *request)
   reply->bs_payload_length = 0;
     
   for (int sda_pin = 0; sda_pin < N_GPIO; sda_pin++) {
-    ESP.wdtFeed(); // Feed every SDA row
+    system_soft_wdt_feed(); // Feed every SDA row
     for(int scl_pin = 0; scl_pin < N_GPIO; scl_pin++) {
       if (sda_pin == scl_pin) continue;
       
@@ -246,7 +246,7 @@ discover_I2C_slaves(struct bs_request_s *request)
   reply->bs_payload_length = 0;
   count = 0;
   for (int slaveAddress = 0; slaveAddress < 128; slaveAddress++) {
-    ESP.wdtFeed();
+    system_soft_wdt_feed();
     Wire.beginTransmission(slaveAddress);
     if (Wire.endTransmission() == 0) { // if (no errors)
       reply_data[count++] = slaveAddress;
