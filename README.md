@@ -4,11 +4,11 @@ License: GPLv3
 An automated tool for hardware hacking. This repository is a modernized fork of the original **BUSSide** project developed by **Silvio Cesare**.
 
 ## Project Status: 2026 Update ## 
-The original BUSSide was a ground-breaking tool for hardware security researchers. However hasn't been maintained for a while |  and dependencies evolved. This fork was created to ensure the tool remains accessible and functional in a modern ecosystem.
+The original BUSSide was a ground-breaking tool for hardware security researchers. However hasn't been maintained for a while, and dependencies evolved. This fork was created to ensure the tool remains accessible and functional in a modern ecosystem.
 
 ### Key Improvements:
 * **Python 3 Migration:** Fully ported the client-side logic from Python 2.7 to Python 3.x.
-* **C++ Maintenance:** Fixed compilation errors in the firmware (C++ pieces) caused by updated toolchains and deprecated libraries |  ensuring it builds cleanly in 2026 environments.
+* **C++ Maintenance:** Fixed compilation errors in the firmware (C++ pieces) caused by updated toolchains and deprecated libraries ensuring it builds cleanly in 2026 environments (ESP8266 v3.12)
 * **Dependency Refresh:** Updated requirements to align with current serial and communication libraries.
 
 ---
@@ -16,20 +16,20 @@ The original BUSSide was a ground-breaking tool for hardware security researcher
 ## Attribution
 **Original Author:** [Silvio Cesare](https://github.com/silviocesare) - [The BUSSide can be found here](https://github.com/BSidesCbr/BUSSide)
 
-Silvio did all the heavy lifting |  research |  and original implementation of the bus logic. This fork is maintained by [Martin Boller](https://github.com/martinboller) simply to keep the project alive and running on Python 3 and latest versions of the Arduino IDE.
+Silvio did all the heavy lifting, research, and original implementation of the bus logic. This fork is maintained by [Martin Boller](https://github.com/martinboller) simply to keep the project alive and running on Python 3 and latest versions of the Arduino IDE.
 
 ---
 
 ## Overview
 BUSSide is designed to interface with various hardware buses to assist in device exploitation and security auditing. It acts as a bridge between your workstation and the target's physical layer using a NodeMCU ESP 8226 v2 (v3 has a different pin layout |  but works on a breadboard).
 
-### Supported Protocols
-| Protocol | Capabilities |
-| :--- | :--- |
-| **UART** | Automated baud rate detection and interactive shell access. |
-| **SPI** | Flash dumping |  peripheral interaction |  and sniffing. |
-| **I2C** | Device address scanning and EEPROM data extraction. |
-| **JTAG** | Pin Discovery. |
+### Supported Protocols and features
+| Protocol | Discovery | Flash Dump | Flash Write | Flash Fuzzing | Interaction |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **I2C** | √ | √ | √ | - | - |
+| **JTAG** | √ | - | - | - | - |
+| **SPI** | √ | √ | √ | √ | √ |
+| **UART** | √ | - | - | - | √ |
 
 ---
 
@@ -67,6 +67,7 @@ Make sure to
 - include library EspSoftwareSerial (Sketch -> Include Library -> select EspSoftwareSerial from list)
 - Install the NodeMCU board into the IDE: *File -> Preferences* and in *Additional Boards Manager URLs* add http://arduino.esp8266.com/stable/package_esp8266com_index.json
 - *Tools -> Boards -> Boards Manager* Search for esp8266 and install the package.
+- Edit .arduino15/packages/esp8266/hardware/esp8266/3.1.2/tools/elf2bin.py and change the two instances of *words = re.split('\s+', line)* to *words = re.split(r'\s+', line)*
 - Set the board to NodeMCU 1.0
 - Set the speed to 160MHz (via the IDE in the Tools dropdown)
 - Then Compile and/or upload directly to the NodeMCU.
