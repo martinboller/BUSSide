@@ -1,11 +1,10 @@
 #include <SoftwareSerial.h>
-
 #include <Boards.h>
 #include <pins_arduino.h>
 #include "BUSSide.h"
 #include <ESP8266WiFi.h>
 // To allow even lower (closer to the metal) feed of software watchdog, by calling the underlying Espressif SDK - using system_soft_wdt_feed();
-// to save more resources than ESP.wdtfeed
+// to save even more resources than ESP.wdtfeed
 #include "user_interface.h"
 
 #define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
@@ -16,6 +15,9 @@ SoftwareSerial* swSerPtr = nullptr;
 
 void reset_gpios();
 
+// Set a high comms baudrate for firmware to allow for good performance
+int baudRate = 500000;
+
 int gpio[N_GPIO];
 int gpioIndex[N_GPIO] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
 const char *gpioName[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8" };
@@ -24,6 +26,7 @@ byte pins[] = { D0, D1, D2, D3, D4, D5, D6, D7, D8 };
 const char * pinnames[] = { "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", };
 const byte pinslen = sizeof(pins)/sizeof(pins[0]);  
 
+// precomputed CRCs
 static uint32_t crc_table[16] = {
     0x00000000, 0x1db71064, 0x3b6e20c8, 0x26d930ac,
     0x76dc4190, 0x6b6b51f4, 0x4db26158, 0x5005713c,
@@ -74,12 +77,14 @@ reset_gpios()
 void
 setup()
 {
+  // Completely disableWiFi to save power and resources
+  // to focus on bitbanging
   WiFi.disconnect();
   WiFi.mode(WIFI_OFF);
   WiFi.forceSleepBegin();
   delay(1);
   reset_gpios();
-  Serial.begin(500000);
+  Serial.begin(baudRate);
   while (!Serial);
   Serial.printf("Welcome to the BUSSide!\n");
   usTicks = asm_ccount();
@@ -276,5 +281,5 @@ loop()
     reset_gpios();
     send_reply(request, reply);
     free(reply);
-    free(request);   
+    free(request);
 }

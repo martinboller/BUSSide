@@ -214,10 +214,10 @@ def doCommand(command):
         return True # Return True so the main loop knows it was handled
 
     # Hardware Commands (Reset + Sync)
-    print(f"+++ Resetting and Syncing NodeMCU for Command: <{command}>...")
+    print(f"+++ Syncing NodeMCU for Command: <{command}>...")
     
     # Trigger the hardware reset
-    bs.ResetDevice()
+    #bs.ResetDevice()
 
     # Perform the handshake
     bs.FlushInput()
@@ -234,7 +234,7 @@ def doCommand(command):
     if sync_result is None:
         return None
     
-    # STEP 3: Route to sub-modules
+    # Route to sub-modules
     if command.find("spi ") == 0:
         return bs_spi.doCommand(command[4:])
     elif command.find("i2c ") == 0:

@@ -1,20 +1,19 @@
 #include <pins_arduino.h>
 #include "BUSSide.h"
-#include <SoftwareSerial.h>
-#include <SoftwareSerial.h>
 
-// Declare this globally so it doesn't live on the stack
-static IRAM_ATTR SoftwareSerial* globalSer = nullptr;
+// Declare globally so it doesn't live on the stack
+static SoftwareSerial* globalSer = nullptr;
 
 //#define min(a,b) (((a)<(b))?(a):(b))
 
-uint32_t IRAM_ATTR usTicks = 0;
+uint32_t  usTicks = 0;
 
-static int IRAM_ATTR gpioVal[N_GPIO];
+
+static int gpioVal[N_GPIO];
 
 #define sampleTx(pin) digitalRead(pin)
 
-struct IRAM_ATTR uartInfo_s {
+struct uartInfo_s {
   int baudRate;
   float microsDelay;
 } uartInfo[] = {
@@ -31,9 +30,9 @@ struct IRAM_ATTR uartInfo_s {
   { 0, 0 },
 };
 
-static int IRAM_ATTR uartSpeedIndex;
+static int uartSpeedIndex;
 
-static unsigned int IRAM_ATTR findNumberOfUartSpeeds(void)
+static unsigned int findNumberOfUartSpeeds(void)
 {
   unsigned int i;
 
@@ -41,6 +40,7 @@ static unsigned int IRAM_ATTR findNumberOfUartSpeeds(void)
   return i;
 }
 
+// in RAM for speed (be careful there's not much of it)
 static int IRAM_ATTR waitForIdle(int pin)
 {
   unsigned long startTime;
@@ -91,6 +91,7 @@ static int IRAM_ATTR buildwidths(int pin, int *widths, int nwidths)
   return 0;
 }
 
+// in RAM for speed (be careful there's not much of it)
 static unsigned int IRAM_ATTR findminwidth(int *widths, int nwidths)
 {
   int minIndex1;
@@ -105,7 +106,6 @@ static unsigned int IRAM_ATTR findminwidth(int *widths, int nwidths)
   }
   return min1;
 }
-
 
 static float autobaud(int pin, int *widths, int nwidths)
 {
@@ -122,26 +122,63 @@ static float autobaud(int pin, int *widths, int nwidths)
   return (float)sum/(float)c;
 }
 
-static int tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
+// in RAM for speed (be careful there's not much of it)
+// Original with Floating Point Math
+// static int IRAM_ATTR tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
+// {
+//   float width_timepos = 0.05;
+//   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
+//   float stopTime = bitTime*((float)framesize - (float)stopbits + 0.5);
+//   float frameTime = bitTime*(float)framesize;
+//   float w;
+//   int framingErrors = 0;
+
+//   w = 0.0;
+//   for (int i = 2; i < nwidths-1; i++) {
+//     if (stopTime >= w && stopTime < (w + widths[i])) {
+//       if ((i % 2) != widths[0]) {
+//         framingErrors++;
+//         if (framingErrors >= 1)
+//           return 0;
+//       }
+//       w = 0.0;
+//     } else {
+//       w += widths[i];
+//     }
+//   }
+//   return 1;
+// }
+
+// in RAM for speed (be careful there's not much of it)
+// further optimized by not doing any floating point math, should execute in roughly 1/10th the clock cycles of the original.
+static int IRAM_ATTR tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
 {
-  float width_timepos = 0.05;
-  float bitTime = uartInfo[uartSpeedIndex].microsDelay;
-  float stopTime = bitTime*((float)framesize - (float)stopbits + 0.5);
-  float frameTime = bitTime*(float)framesize;
-  float w;
+  // Scale by 100 to keep two decimal places of precision without floats
+  uint32_t bitTimeX100 = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 100.0f);
+  
+  // theoretical stop bit start time: bitTime * (framesize - stopbits + 0.5)
+  // We use (stopbits * 2 - 1) * 50 to represent the "+ 0.5" offset in X100 scale
+  uint32_t stopTimeX100 = (bitTimeX100 * (framesize - stopbits)) + (bitTimeX100 / 2);
+  
+  uint32_t wX100 = 0;
   int framingErrors = 0;
 
-  w = 0.0;
-  for (int i = 2; i < nwidths-1; i++) {
-    if (stopTime >= w && stopTime < (w + widths[i])) {
+  for (int i = 2; i < nwidths - 1; i++) {
+    uint32_t currentWidthX100 = (uint32_t)widths[i] * 100;
+    uint32_t nextWX100 = wX100 + currentWidthX100;
+
+    // Check if the current pulse spans across the expected Stop Bit timing
+    if (stopTimeX100 >= wX100 && stopTimeX100 < nextWX100) {
+      // UART Stop bits must be HIGH. 
+      // If widths[0] (start bit level) was HIGH, then even indices are LOW.
+      // If widths[0] was LOW, then even indices are HIGH.
       if ((i % 2) != widths[0]) {
         framingErrors++;
-        if (framingErrors >= 1)
-          return 0;
+        if (framingErrors >= 1) return 0;
       }
-      w = 0.0;
+      wX100 = 0; // Reset for next frame alignment
     } else {
-      w += widths[i];
+      wX100 = nextWX100;
     }
   }
   return 1;
@@ -231,18 +268,17 @@ static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
   return 0;
 }
 
-static int IRAM_ATTR frameSize;
-static int IRAM_ATTR stopBits;
-static int IRAM_ATTR dataBits;
-static int IRAM_ATTR parity;
+static int frameSize;
+static int stopBits;
+static int dataBits;
+static int parity;
 static float bitTime;
 
-#define NWIDTHS 200
+#define nwidths 20 //was 200 for accuracy
 
-static int IRAM_ATTR
-UART_line_settings_direct(struct bs_reply_s *reply, int index)
+static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
 {
-  int widths[NWIDTHS];
+  int widths[nwidths];
   char s[100];
   unsigned long timeStart;
   int n;
@@ -256,34 +292,48 @@ UART_line_settings_direct(struct bs_reply_s *reply, int index)
   else
     pinMode(pin, INPUT_PULLUP);
 
-  ret = buildwidths(pin, widths, NWIDTHS);
+  ret = buildwidths(pin, widths, nwidths);
   if (ret) {
     return -6;
   }
-  uartSpeedIndex = calcBaud(pin, widths, NWIDTHS);
+  uartSpeedIndex = calcBaud(pin, widths, nwidths);
   if (uartSpeedIndex < 0) {
     return -1;
   }
   bitTime = uartInfo[uartSpeedIndex].microsDelay;
 
+  // Initialize results
   frameSize = -1;
-    for (int i = 7; i < 14; i++) {
-      if (tryFrameSize(i, 1, widths, NWIDTHS)) {
-        frameSize = i;
-        break;
-      }
+  int detectedFrame = -1;
+
+  if (buildwidths(pin, widths, nwidths) != 0) {
+    delay(10); // Wait for activity
   }
+
+  // Check 10 and 11 first because they are the most typical UART traffic by far
+  int prioritySizes[] = {10, 11, 9, 8, 7, 12, 13};
+  for (int i = 0; i < 7; i++) {
+    int testSize = prioritySizes[i];
+    if (tryFrameSize(testSize, 1, widths, nwidths)) {
+      detectedFrame = testSize;
+      break; // Found a valid size for this sample
+  }  
+    if (detectedFrame != -1) break; // On hit, stop sampling
+    yield();
+  }
+  frameSize = detectedFrame;
+  
   if (frameSize < 0) {
     return -1;
-  } else {
   }
-  if (tryFrameSize(frameSize, 2, widths, NWIDTHS)){
+
+  if (tryFrameSize(frameSize, 2, widths, nwidths)){
     stopBits = 2;
   } else {
     stopBits = 1;
   }
 
-  parity = calcParity(frameSize, stopBits, widths, NWIDTHS);
+  parity = calcParity(frameSize, stopBits, widths, nwidths);
   if (parity == -2) {
     return -1;
   } else if (parity < 0) {
@@ -305,7 +355,7 @@ UART_line_settings_direct(struct bs_reply_s *reply, int index)
   return 0;
 }
 
-struct bs_frame_s* IRAM_ATTR
+struct bs_frame_s* 
 UART_all_line_settings(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
@@ -319,7 +369,7 @@ UART_all_line_settings(struct bs_request_s *request)
   for (int i = 0; i < N_GPIO; i++) {
     if (gpio[i] > 100) {
       u++;
-      for (int attempt = 0; attempt < 50; attempt++) {
+      for (int attempt = 0; attempt < 3; attempt++) {
         int ret;
 
         system_soft_wdt_feed();
@@ -339,8 +389,8 @@ UART_all_line_settings(struct bs_request_s *request)
   return reply;
 }
 
-struct IRAM_ATTR bs_frame_s*
-data_discovery(struct bs_request_s *request)
+// in RAM for speed (be careful there's not much of it)
+struct  bs_frame_s* IRAM_ATTR data_discovery(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
   uint32_t *reply_data;
@@ -390,7 +440,7 @@ struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
     swSerPtr = new SoftwareSerial(rx, tx, false);
     swSerPtr->begin(baud);
 
-    // Send the "OK" to Python so the terminal opens
+    // Send BS_REPLY_UART_PASSTHROUGH to Python so the terminal opens
     struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
     if (reply) {
         memcpy(reply, request, BS_HEADER_SIZE);
@@ -414,7 +464,8 @@ struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
                 Serial.println(F("BUSSIDE_EXIT_REBOOT"));
                 Serial.flush();
                 delay(500);
-                ESP.restart(); // This is the only 100% reliable way to clear interrupts
+                //ESP.restart(); // This is the only 100% reliable way to clear interrupts
+                return NULL;
             }
             
             swSerPtr->write(c);
@@ -427,7 +478,7 @@ struct bs_frame_s* UART_passthrough(struct bs_request_s *request) {
 }
 
 // Detecting BUSSide TX pin
-struct IRAM_ATTR bs_frame_s*
+struct  bs_frame_s*
 UART_discover_tx(struct bs_request_s *request)
 {
   uint32_t *request_args, *reply_data;
@@ -447,30 +498,30 @@ UART_discover_tx(struct bs_request_s *request)
 
   for (txpin = 1; txpin < N_GPIO; txpin++) {
     system_soft_wdt_feed();
-    yield(); // <--- Give the OS time to breathe
-    // Skip if it's the pin we are listening ons
+    yield(); // Giving the dog a bone
+    // Skip listening pin
     if (rxpin == txpin) continue;
     pinMode(gpioIndex[txpin], OUTPUT); // Explicitly claim the pin
     digitalWrite(gpioIndex[txpin], HIGH); // Idle state for UART is HIGH
     
-    // Initialize: NodeMCU RX (Fixed), NodeMCU TX (Candidate)
+    // Initialize: NodeMCU RX pin (Fixed), NodeMCU TX (Candidate being tested)
     SoftwareSerial ser(gpioIndex[rxpin], gpioIndex[txpin]);
     ser.begin(baudrate);
     
-    // 1. Flush any noise/garbage from the buffer before probing
+    // Flush any noise/garbage from the buffer before probing
     while (ser.available()) { ser.read(); }
 
-    // 2. Send Probe (Two Carriage Return/linefeeds to be sure)
-    ser.print("\r\n\r\n");
+    // Send Probe (Two Carriage Return/linefeeds to be sure)
+    ser.print("BUSSide\r\n\r\n");
     
-    // 3. Listen Window: Wait up to 500ms for any sign of life
+    // Listen Window: Wait up to 500ms for any sign of life
     unsigned long startWait = millis();
     bool activityDetected = false;
     int validChars = 0;
 
     while (millis() - startWait < 500) {
       // After sending 2 cr/lf, check for good ascii characters from DUT
-      // If 2 or more received from DUT consider the pin in was sent on BUSSide TX
+      // If 2 or more received from DUT consider the pin data was sent on the BUSSide TX
       if (ser.available() > 0) {
         int c = ser.read();
         // Check if the character is printable ASCII or standard whitespace
