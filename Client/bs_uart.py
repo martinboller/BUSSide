@@ -27,7 +27,16 @@ def uart_data_discover():
 
     ngpio = 9
     for i in range(ngpio):
-        print("+++ SIGNAL CHANGES: D%d --> %d" % ((i + 1), bs_reply_args[i]))
+        #print("+++ SIGNAL CHANGES: D%d --> %d" % ((i + 1), bs_reply_args[i]))
+        if bs_reply_args[i] != 0:
+            print("+++-----------------------------------------------+++")
+            print("+++ SIGNAL CHANGES: D%d --> %d" % ((i + 1), bs_reply_args[i]))
+            print("+++-----------------------------------------------+++")
+        else:
+            print("+++ GPIO %d: No signal changes detected" % (i + 1))
+    
+    print("+++ Note: GPIO 1 may show activity but can't be used for UART.")
+    print("+++")        
     print("+++ UART Data Discover Command Successfully Completed\n")
     return rv
 

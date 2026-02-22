@@ -8,10 +8,11 @@ static SoftwareSerial* globalSer = nullptr;
 
 uint32_t  usTicks = 0;
 
-
 static int gpioVal[N_GPIO];
 
-#define sampleTx(pin) digitalRead(pin)
+// Direct Register Read for ESP8266 should increase speed
+// #define sampleTx(pin) ((GPI & (1 << pin)) != 0)
+#define sampleTx(pin) ( (pin == 16) ? (GP16I & 0x01) : (GPI & (1 << pin)) )
 
 struct uartInfo_s {
   int baudRate;
@@ -41,25 +42,59 @@ static unsigned int findNumberOfUartSpeeds(void)
 }
 
 // in RAM for speed (be careful there's not much of it)
+// static int IRAM_ATTR waitForIdle(int pin)
+// {
+//   unsigned long startTime;
+//   unsigned long bitTime10;
+//   int32_t beginTime;
+
+//   beginTime = asm_ccount();
+//   bitTime10 = uartInfo[uartSpeedIndex].microsDelay * 10.0;
+// start:
+//   system_soft_wdt_feed();
+//   if ((uint32_t)(asm_ccount() - beginTime)/FREQ >= 10*1000000)
+//     return 1;
+//   startTime = microsTime();
+//   while ((microsTime() - startTime) <  bitTime10) {
+//     if (sampleTx(pin) != HIGH)
+//       goto start;
+//     ;
+//   }
+//   return 0;
+// }
+
 static int IRAM_ATTR waitForIdle(int pin)
 {
-  unsigned long startTime;
-  unsigned long bitTime10;
-  int32_t beginTime;
+  // Safety: GPIO16 (D0) uses a different register on ESP8266
+  bool isGPIO16 = (pin == 16);
+  uint32_t pinMask = (1 << pin);
+  
+  // 10 bits of IDLE time required to confirm we are between characters
+  // FREQ is usually 80 (for 80MHz)
+  uint32_t bitTime10Cycles = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 10.0f * FREQ);
+  
+  // Global timeout: 2 seconds is plenty for discovery (reduced from 10)
+  uint32_t timeoutCycles = 2 * 1000000 * FREQ; 
+  uint32_t startWait = asm_ccount();
 
-  beginTime = asm_ccount();
-  bitTime10 = uartInfo[uartSpeedIndex].microsDelay * 10.0;
 start:
-  system_soft_wdt_feed();
-  if ((uint32_t)(asm_ccount() - beginTime)/FREQ >= 10*1000000)
-    return 1;
-  startTime = microsTime();
-  while ((microsTime() - startTime) <  bitTime10) {
-    if (sampleTx(pin) != HIGH)
+  uint32_t checkStart = asm_ccount();
+  
+  while ((asm_ccount() - checkStart) < bitTime10Cycles) {
+    // Check if line is LOW (active)
+    bool isLow = isGPIO16 ? !(GP16I & 0x01) : !(GPI & pinMask);
+    
+    if (isLow) {
+      // If line is active, check for global timeout then reset idle timer
+      if ((asm_ccount() - startWait) > timeoutCycles) return 1;
+      
+      // Feed watchdog only when we see activity to keep loop tight
+      system_soft_wdt_feed(); 
       goto start;
-    ;
+    }
   }
-  return 0;
+  
+  return 0; // Line is officially IDLE
 }
 
 static int IRAM_ATTR buildwidths(int pin, int *widths, int nwidths)
@@ -107,20 +142,61 @@ static unsigned int IRAM_ATTR findminwidth(int *widths, int nwidths)
   return min1;
 }
 
-static float autobaud(int pin, int *widths, int nwidths)
+// Returns bit width scaled by 100
+static uint32_t IRAM_ATTR autobaud_int(int *widths, int nwidths)
 {
-  int sum;
-  int c = 0;
+  uint32_t sumX100 = 0;
+  int count = 0;
 
-  sum = 0;
-  for (int i = 2; (i+15) < nwidths; i += 15, c++) {
-    int minwidth;
-    
-    minwidth = findminwidth(&widths[i], 15);
-    sum += minwidth;
+  // We look at chunks of pulses to find the smallest consistent width
+  for (int i = 2; (i + 15) < nwidths; i += 15) {
+    uint32_t minw = findminwidth(&widths[i], 15);
+    sumX100 += (minw * 100);
+    count++;
   }
-  return (float)sum/(float)c;
+  
+  if (count == 0) return 0;
+  return sumX100 / count;
 }
+
+static int IRAM_ATTR calcBaud(int pin, int *widths, int nwidths)
+{
+  uint32_t measuredWidthX100 = autobaud_int(widths, nwidths);
+  if (measuredWidthX100 == 0) return -1;
+
+  int bestIndex = -1;
+  uint32_t minDiff = 0xFFFFFFFF;
+
+  for (int i = 0; uartInfo[i].baudRate; i++) {
+    uint32_t targetWidthX100 = (uint32_t)(uartInfo[i].microsDelay * 100.0f);
+    
+    // Calculate Absolute Difference
+    uint32_t diff = (measuredWidthX100 > targetWidthX100) ? 
+                    (measuredWidthX100 - targetWidthX100) : 
+                    (targetWidthX100 - measuredWidthX100);
+
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
+}
+
+// static float autobaud(int pin, int *widths, int nwidths)
+// {
+//   int sum;
+//   int c = 0;
+
+//   sum = 0;
+//   for (int i = 2; (i+15) < nwidths; i += 15, c++) {
+//     int minwidth;
+    
+//     minwidth = findminwidth(&widths[i], 15);
+//     sum += minwidth;
+//   }
+//   return (float)sum/(float)c;
+// }
 
 // in RAM for speed (be careful there's not much of it)
 // Original with Floating Point Math
@@ -184,88 +260,116 @@ static int IRAM_ATTR tryFrameSize(int framesize, int stopbits, int *widths, int 
   return 1;
 }
 
-static int calcBaud(int pin, int *widths, int nwidths)
+// static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
+// {
+//   float width_timepos = 0.0;
+//   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
+//   float stopTime = bitTime*((float)frameSize - (float)stopBits + 0.5);
+//   float frameTime = bitTime*(float)frameSize;
+//   float w;
+//   int bits[20];
+//   float dataTime = (float)bitTime * 1.5;
+//   int onBits = 0;
+//   int odd, even;
+//   int bitCount;
+//   int framingErrors;
+
+//   framingErrors = 0;
+//   bitCount = 0;
+//   odd = 0;
+//   even = 0;
+//   w = 0.0;
+//   for (int i = 2; i < nwidths-1; i++) {
+//     if (dataTime >= w && dataTime < (w + widths[i])) {
+//       bits[bitCount] = i % 2;
+//       if (i % 2)
+//         onBits++;
+//       if (bitCount < (frameSize - stopBits)) {
+//          dataTime += dataTime;
+//       }
+//     }
+//     if (stopTime >= w && stopTime < (w + widths[i])) {
+//       if ((i % 2) != widths[0]) {
+// //        Serial.printf("stop error\n");
+//         framingErrors++;
+//         if (framingErrors >= 1)
+//           return 0;
+//       }
+//       if (onBits & 1)
+//         odd++;
+//       else
+//         even++;
+//       w = 0.0;
+//       bitCount = 0;
+//       dataTime = (float)bitTime * 1.5;
+//       onBits = 0;
+//     } else {
+//       w += widths[i];
+//     }
+//   }
+// //  Serial.printf("odd %i even %i\n", odd, even);
+//   if (odd && even && min(odd,even) >= 1)
+//     return -1;
+//   if (odd)
+//     return 1;
+//   return 0;
+// }
+
+
+static int IRAM_ATTR calcParity(int frameSize, int stopBits, int *widths, int nwidths)
 {
-  char fstr[6];
-  char s[100];
-  int baudIndex;
-  float min1;
-  int minDelayIndex;
-  float minDelay;
-
-  min1 = autobaud(pin, widths, nwidths);
-  minDelayIndex = -1;
-  for (int i = 0; uartInfo[i].baudRate; i++) {
-    double abs_delay;
-
-    abs_delay = min1 - uartInfo[i].microsDelay;
-    abs_delay *= abs_delay;
-    if (minDelayIndex < 0 || abs_delay < minDelay) {
-      minDelay = abs_delay;
-      minDelayIndex = i;
-    }
-  }
-  baudIndex = minDelayIndex;
-
-//  dtostrf(min1, 4, 2, fstr);
-//  sprintf(s, "\r\n\r\nBITWIDTH: %s\r\nBAUDRATE measured=%i nearest=%i\r\n", fstr, (int)(1000000.0/min1), uartInfo[baudIndex].baudRate);
-//  Serial.print(s);
-  return baudIndex;
-}
-
-static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
-{
-  float width_timepos = 0.0;
-  float bitTime = uartInfo[uartSpeedIndex].microsDelay;
-  float stopTime = bitTime*((float)frameSize - (float)stopBits + 0.5);
-  float frameTime = bitTime*(float)frameSize;
-  float w;
-  int bits[20];
-  float dataTime = (float)bitTime * 1.5;
+  uint32_t bitTimeX100 = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 100.0f);
+  
+  // Theoretical timing for the center of the first data bit (1.5 bits in)
+  uint32_t dataTimeX100 = (bitTimeX100 * 3) / 2;
+  // Theoretical timing for the stop bit check
+  uint32_t stopTimeX100 = (bitTimeX100 * (frameSize - stopBits)) + (bitTimeX100 / 2);
+  
+  uint32_t wX100 = 0;
   int onBits = 0;
-  int odd, even;
-  int bitCount;
-  int framingErrors;
+  int odd = 0, even = 0;
+  int bitCount = 0;
+  int framingErrors = 0;
 
-  framingErrors = 0;
-  bitCount = 0;
-  odd = 0;
-  even = 0;
-  w = 0.0;
-  for (int i = 2; i < nwidths-1; i++) {
-    if (dataTime >= w && dataTime < (w + widths[i])) {
-      bits[bitCount] = i % 2;
-      if (i % 2)
+  for (int i = 2; i < nwidths - 1; i++) {
+    uint32_t pWidthX100 = (uint32_t)widths[i] * 100;
+    uint32_t nextWX100 = wX100 + pWidthX100;
+
+    // Check Data Bits: If the "center" of a bit falls within this pulse
+    while (dataTimeX100 >= wX100 && dataTimeX100 < nextWX100) {
+      if ((i % 2) != widths[0]) { // bit is HIGH
         onBits++;
-      if (bitCount < (frameSize - stopBits)) {
-         dataTime += dataTime;
       }
+      bitCount++;
+      // Move to the center of the NEXT bit
+      dataTimeX100 += bitTimeX100;
     }
-    if (stopTime >= w && stopTime < (w + widths[i])) {
+
+    // Check Stop Bit: If this pulse aligns with the expected Stop Bit position
+    if (stopTimeX100 >= wX100 && stopTimeX100 < nextWX100) {
+      // Validate framing: Stop bit must be HIGH
       if ((i % 2) != widths[0]) {
-//        Serial.printf("stop error\n");
         framingErrors++;
-        if (framingErrors >= 1)
-          return 0;
+        if (framingErrors >= 1) return -2; // Frame Error
       }
-      if (onBits & 1)
-        odd++;
-      else
-        even++;
-      w = 0.0;
+
+      // Parity check: Was the total count of '1's (including parity bit) even or odd?
+      if (onBits & 1) odd++;
+      else even++;
+
+      // Reset for next frame in the width buffer
+      wX100 = 0;
       bitCount = 0;
-      dataTime = (float)bitTime * 1.5;
       onBits = 0;
+      dataTimeX100 = (bitTimeX100 * 3) / 2;
     } else {
-      w += widths[i];
+      wX100 = nextWX100;
     }
   }
-//  Serial.printf("odd %i even %i\n", odd, even);
-  if (odd && even && min(odd,even) >= 1)
-    return -1;
-  if (odd)
-    return 1;
-  return 0;
+
+  if (odd && even) return -1; // Inconsistent (Mixed results suggest No Parity)
+  if (odd) return 1;          // Consistently Odd
+  return 0;                   // Consistently Even
 }
 
 static int frameSize;
@@ -306,7 +410,7 @@ static int UART_line_settings_direct(struct bs_reply_s *reply, int index)
   frameSize = -1;
   int detectedFrame = -1;
 
-  if (buildwidths(pin, widths, nwidths) != 0) {
+  if (ret != 0) {
     delay(10); // Wait for activity
   }
 
@@ -371,8 +475,8 @@ UART_all_line_settings(struct bs_request_s *request)
       u++;
       for (int attempt = 0; attempt < 3; attempt++) {
         int ret;
-
         system_soft_wdt_feed();
+        
         ret = UART_line_settings_direct(reply, i);
         if (ret == 0) {
           u++;
@@ -420,7 +524,7 @@ struct  bs_frame_s* IRAM_ATTR data_discovery(struct bs_request_s *request)
         gpio[i]++;
       }
     }
-  } while ((uint32_t)(asm_ccount() - startTime)/FREQ < (7.5 * 1000000));  
+  } while ((uint32_t)(asm_ccount() - startTime)/FREQ < (3 * 1000000)); // Changed from 7.5 to 5 seconds
   reply->bs_payload_length = 4*N_GPIO;
   for (int i = 0; i < N_GPIO; i++) {
     reply_data[i] = gpio[i];
