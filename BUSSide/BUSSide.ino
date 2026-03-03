@@ -6,6 +6,9 @@
 // To allow even lower (closer to the metal) feed of software watchdog, by calling the underlying Espressif SDK - using system_soft_wdt_feed();
 // to save even more resources than ESP.wdtfeed
 #include "user_interface.h"
+#include <Arduino.h>
+#include <eagle_soc.h>
+#include <uart_register.h>
 
 #define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
 
@@ -53,6 +56,24 @@ unsigned long crc_mem(char *s, int n)
   return crc;
 }
 
+extern "C" {
+  // system_update_cpu_freq is in user_interface.h
+  void rom_i2c_writeReg(uint8_t block, uint8_t host_id, uint8_t reg_add, uint8_t data);
+}
+
+void set_cpu_320mhz() {
+    // Initially use official config at 160MHz
+    // Cast as uint8_t to avoid any errors
+    system_update_cpu_freq((uint8_t)160);
+    
+    // Modify unofficial PLL registers according to the cnlohr-hack
+    rom_i2c_writeReg(103, 4, 1, 136); 
+    
+    // Multiplex the CPU to the 320MHz output from PLL
+    uint32_t reg_val = READ_PERI_REG(0x60000700);
+    WRITE_PERI_REG(0x60000700, (reg_val & ~0x3) | 0x1); 
+}
+
 void
 delay_us(int us)
 {
@@ -83,6 +104,7 @@ setup()
   WiFi.mode(WIFI_OFF);
   WiFi.forceSleepBegin();
   delay(1);
+  set_cpu_320mhz();
   reset_gpios();
   Serial.begin(baudRate);
   while (!Serial);
