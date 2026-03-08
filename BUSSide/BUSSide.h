@@ -110,6 +110,7 @@ asm_ccount(void)
 #define BS_REPLY_SPI_FAST_SEND          44
 #define BS_LED_BLINK                    45
 #define BS_REPLY_LED_BLINK              46
-
-
+#define BS_UART_SET_CONFIG              47
+#define BS_UART_GET_CONFIG              48
+#define BS_REPLY_UART_GET_CONFIG        49
 #endif

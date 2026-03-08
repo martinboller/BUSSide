@@ -58,7 +58,6 @@ def uart_tx(rxpin, baudrate):
     print("+++ UART Discovery TX Command Successfully Completed\n")
     return rv
 
-
 def uart_rx():
     print("+++ Sending UART discovery rx command")
     request_args = []
@@ -88,8 +87,8 @@ def uart_rx():
                     baudrate = bs_reply_args[base + 4]
                     
                     print("+++ UART FOUND")
+                    print("+++ BAUDRATE: %d" % (baudrate))
                     print("+++ DATABITS: %d" % (databits))
-                    print("+++ STOPBITS: %d" % (stopbits))
                     
                     if parity == 0:
                         print("+++ PARITY: EVEN")
@@ -97,13 +96,69 @@ def uart_rx():
                         print("+++ PARITY: ODD")
                     else:
                         print("+++ PARITY: NONE")
-                    print("+++ BAUDRATE: %d" % (baudrate))
+                    print("+++ STOPBITS: %d" % (stopbits))
         else:
             print("--- GPIO %d: No data received from hardware" % (i + 1))
     print("+++ UART Discovery RX Command Successfully Completed\n")
     return (bs_reply_length, bs_reply_args)
 
+def uart_get_status():
+    """Queries the hardware for the current persistent UART settings."""
+    print("+++ Querying Hardware UART Status...")
+    bs.NewTimeout(2)
+    # Command 48: BS_UART_GET_CONFIG
+    rv = bs.requestreply(48, [])
+    
+    if rv is None:
+        print("--- Error: No response from hardware.")
+        return None
 
+    _, args = rv
+    if len(args) < 3:
+        print("--- Error: Malformed status response.")
+        return None
+
+    dbits = args[0]
+    sbits = args[1]
+    p_val = args[2]
+
+    # Map the integer back to a string for the user
+    # Note: C++ uses -1 (represented as 4294967295 in unsigned 32-bit) for None
+    p_name = "NONE"
+    if p_val == 0: p_name = "EVEN"
+    elif p_val == 1: p_name = "ODD"
+    elif p_val > 2: p_name = "NONE" # Catch-all for -1 unsigned wrap
+
+    print("+++-----------------------------------+++")
+    print(f"+++ CURRENT HW CONFIG: {dbits}{p_name[0]}{sbits}")
+    print(f"+++ Data Bits: {dbits}")
+    print(f"+++ Stop Bits: {sbits}")
+    print(f"+++ Parity:    {p_name}")
+    print("+++-----------------------------------+++")
+    return True
+
+def uart_config(dbits, parity_char, sbits):
+    """Sets the global UART parameters on the BUSSide hardware."""
+    try:
+        # Convert parity character to the numeric index the C++ code expects
+        # -1: None (0), 0: Even (1), 1: Odd (2)
+        p_map = {"n": 0, "e": 1, "o": 2}
+        p_val = p_map.get(str(parity_char).lower(), 0)
+        
+        # Pack into mask: [Parity(bits 8-11)][Stop(bits 4-7)][Data(bits 0-3)]
+        mask = (int(dbits) & 0x0F)
+        mask |= (int(sbits) & 0x0F) << 4
+        mask |= (p_val & 0x0F) << 8
+        
+        print(f"+++ Sending Config (ID 47) | Mask: {hex(mask)} ({dbits}{parity_char.upper()}{sbits})")
+        
+        bs.NewTimeout(2)
+        # Use 47 to match #define BS_UART_SET_CONFIG 47 in busside.h
+        return bs.requestreply(47, [mask])
+    except Exception as e:
+        print(f"--- UART Config Error: {e}")
+        return None
+    
 def uart_passthrough(gpiorx, gpiotx, baudrate):
     # Convert indices (1-based to 0-based)
     rx_idx = int(gpiorx) - 1
@@ -180,7 +235,7 @@ def uart_passthrough_auto():
     txpin = 0xFFFFFFFF
     # 1. Discover active RX lines
     rv = uart_rx()
-    print("Debug: Starting UART Auto-Discovery")
+    print("+++ Starting UART Auto-Discovery")
     
     if rv is None:
         print("+++ NOT FOUND")
@@ -212,13 +267,13 @@ def uart_passthrough_auto():
     
     print(f"+++ Detected RX on Index {rxpin} at {baudrate} baud.")
     print("+++ Waiting for line to idle before TX discovery...")
-    time.sleep(1.5)
+    time.sleep(5)
 
     # 3. Attempt to find the TX pin (the pin we talk TO)
     for j in range(3):
         rv = uart_tx(rxpin, baudrate)
         if rv is not None:
-            _, tx_reply_args = rv
+            tx_reply_args = rv
             detected_tx = tx_reply_args[0]
             if detected_tx != 0xFFFFFFFF:
                 txpin = detected_tx # Use raw index
@@ -233,61 +288,7 @@ def uart_passthrough_auto():
         txpin = 255 # Standard 'No Pin' value for the firmware
         
     # 4. Trigger Passthrough
-    return uart_passthrough_refined(rxpin, txpin, baudrate)
-
-def uart_passthrough_refined(rx_idx, tx_idx, baudrate):
-    BS_UART_PASSTHROUGH = 19
-    print(f"+++ Forcing Passthrough: RX_Idx={rx_idx}, TX_Idx={tx_idx}, Baud={baudrate}")
-    
-    # 1. Use the low-level request sender
-    # We use a try/except block so if it 'times out', we still enter the terminal
-    bs.NewTimeout(2) 
-    try:
-        bs.requestreply(BS_UART_PASSTHROUGH, [rx_idx, tx_idx, baudrate])
-    except:
-        # If the library crashes on timeout, we catch it here
-        pass
-
-    # 2. Force a delay to let the ESP8266 switch modes
-    print("+++ Waiting for hardware bridge to stabilize...")
-    time.sleep(1.0)
-    
-    # 3. Manually grab the serial object
-    ser = bs.getSerial()
-    ser.reset_input_buffer()
-    
-    bs.keys_init()
-    print("--- TERMINAL ACTIVE (Ctrl+C to exit) ---")
-    print("--- Note: If screen is blank, check your wiring! ---")
-    
-    print("--- TERMINAL ACTIVE (Ctrl+C to exit) ---")
-    try:
-        while True:
-            if ser.in_waiting > 0:
-                # Read raw bytes
-                raw_data = ser.read(ser.in_waiting)
-                
-                # 1. Try to print as text
-                sys.stdout.write(raw_data.decode("utf-8", errors="replace"))
-                
-                # 2. DEBUG: Also print the hex if you suspect unprintable data
-                hex_view = "".join([f"[{b:02X}]" for b in raw_data])
-                sys.stdout.write(hex_view)
-                
-                sys.stdout.flush()
-
-            inCh = bs.keys_getchar()
-            if inCh is not None:
-                ser.write(inCh.encode("utf-8"))
-            
-            time.sleep(0.01)
-    except KeyboardInterrupt:
-        print("\n+++ Terminating...")
-    finally:
-        bs.keys_cleanup()
-        ser.write(b'\xfe\xca')
-        time.sleep(0.2)
-    return 0
+    return uart_passthrough(rxpin, txpin, baudrate)
 
 def doCommand(command):
     if command == "discover rx":
@@ -307,10 +308,29 @@ def doCommand(command):
         return 0
     elif command.startswith("passthrough "):
         args = command.split()
-        if len(args) != 4: # passthrough RX TX BAUD
-            print("Usage: passthrough <rx_pin> <tx_pin> <baud>")
+        if len(args) != 4: # passthrough RX TX BAUD DATABITS STOPBITS PARITY
+            print("Usage: passthrough <rx_pin> <tx_pin> <baud> <databits> <stopbits> <parity>")
             return 0
-        uart_passthrough(args[1], args[2], args[3])
+        uart_passthrough(int(args[1]), int(args[2]), int(args[3]))
+        #uart_passthrough_refined(args[1], args[2], args[3])
+        #uart_passthrough_refined(args[1], args[2], args[3], args[4], args[5], args[6])
         return 0
+    
+    elif command.startswith("config "):
+        # Expected input: BUSSide> uart config 8 n 1
+        args = command.split() # ['config', '8', 'n', '1']
+        if len(args) != 4:
+            print("Usage: uart config <databits> <parity> <stopbits>")
+            print("Example: uart config 8 n 1")
+            return 0
+        
+        # Pass the arguments directly to our updated function
+        uart_config(args[1], args[2], args[3])
+        return 0
+    
+    elif command == "status":
+        uart_get_status()
+        return 0
+    
     else:
         return None

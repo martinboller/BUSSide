@@ -85,7 +85,11 @@ COMMAND_TREE = {
             'auto': [],
             '\'<rx_gpio> <tx_gpio> <baudrate>\'': []
         },
-    },
+        'config': {
+            '\'<databits> <parity n|e|o> <stopbits>\'': []
+        },
+        'status': [],
+    },  
     'quit': [],
     'exit': []
 }
@@ -285,6 +289,7 @@ while True:
 
     except KeyboardInterrupt:
         # User hit Ctrl+C during input OR during doCommand
+        bs.ResetDevice()
         reset_terminal()
         print("+++ Interrupted. (Type 'quit' or hit Ctrl+D to exit safely)")
         # Continue so a stray Ctrl+C doesn't kill the session

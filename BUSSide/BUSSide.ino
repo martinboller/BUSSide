@@ -10,6 +10,11 @@
 #include <eagle_soc.h>
 #include <uart_register.h>
 
+// Persistent UART settings
+static int g_dataBits = 8;
+static int g_stopBits = 1;
+static int g_parity   = -1; // -1: None, 0: Even, 1: Odd
+
 #define microsTime()  ((uint32_t)(asm_ccount() - (int32_t)usTicks)/FREQ)
 
 // Persistent state for the passthrough mode
@@ -226,7 +231,25 @@ loop()
       // no return
     }
       break;
-      
+   
+    case BS_UART_SET_CONFIG:
+      reply = UART_set_config(request);
+      // Let the code fall through to the bottom of loop() 
+      // where send_reply and free() happen naturally.
+      break;
+
+    case BS_UART_GET_CONFIG:
+      reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE + 3 * sizeof(uint32_t));
+      if (reply != NULL) {
+        reply->bs_command = BS_REPLY_UART_GET_CONFIG;
+        reply->bs_payload_length = 3 * sizeof(uint32_t);
+        uint32_t *reply_data = (uint32_t *)&reply->bs_payload[0];
+        reply_data[0] = (uint32_t)g_dataBits;
+        reply_data[1] = (uint32_t)g_stopBits;
+        reply_data[2] = (uint32_t)g_parity; // -1, 0, or 1
+      }
+      break;
+
     case BS_I2C_DISCOVER_SLAVES:
       reply = discover_I2C_slaves(request);
       break;

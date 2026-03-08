@@ -33,6 +33,31 @@ struct uartInfo_s {
 
 static int uartSpeedIndex;
 
+struct bs_frame_s* UART_set_config(struct bs_request_s *request) {
+  // Safety: Ensure we actually have data to read
+  if (request->bs_payload_length < 4) return NULL;
+
+  uint32_t *args = (uint32_t *)&request->bs_payload[0];
+  uint32_t mask = args[0];
+
+  g_dataBits = (mask & 0x0F);
+  g_stopBits = (mask >> 4) & 0x0F;
+  
+  uint32_t p_idx = (mask >> 8) & 0x0F;
+  if (p_idx == 1) g_parity = 0;      // Even
+  else if (p_idx == 2) g_parity = 1; // Odd
+  else g_parity = -1;                // None
+
+  // Allocation check
+  struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
+  if (reply) {
+    memcpy(reply, request, BS_HEADER_SIZE);
+    reply->bs_payload_length = 0;
+    reply->bs_command = BS_UART_SET_CONFIG; // Set the command ID for the reply
+  }
+  return reply;
+}
+
 static unsigned int findNumberOfUartSpeeds(void)
 {
   unsigned int i;
@@ -186,200 +211,185 @@ static int IRAM_ATTR calcBaud(int pin, int *widths, int nwidths)
   return bestIndex;
 }
 
-// static float autobaud(int pin, int *widths, int nwidths)
-// {
-//   int sum;
-//   int c = 0;
-
-//   sum = 0;
-//   for (int i = 2; (i+15) < nwidths; i += 15, c++) {
-//     int minwidth;
-    
-//     minwidth = findminwidth(&widths[i], 15);
-//     sum += minwidth;
-//   }
-//   return (float)sum/(float)c;
-// }
-
-// in RAM for speed (be careful there's not much of it)
-// Original with Floating Point Math
-// static int IRAM_ATTR tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
-// {
-//   float width_timepos = 0.05;
-//   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
-//   float stopTime = bitTime*((float)framesize - (float)stopbits + 0.5);
-//   float frameTime = bitTime*(float)framesize;
-//   float w;
-//   int framingErrors = 0;
-
-//   w = 0.0;
-//   for (int i = 2; i < nwidths-1; i++) {
-//     if (stopTime >= w && stopTime < (w + widths[i])) {
-//       if ((i % 2) != widths[0]) {
-//         framingErrors++;
-//         if (framingErrors >= 1)
-//           return 0;
-//       }
-//       w = 0.0;
-//     } else {
-//       w += widths[i];
-//     }
-//   }
-//   return 1;
-// }
-
 // in RAM for speed (be careful there's not much of it)
 // further optimized by not doing any floating point math, should execute in roughly 1/10th the clock cycles of the original.
-static int IRAM_ATTR tryFrameSize(int framesize, int stopbits, int *widths, int nwidths)
+static int IRAM_ATTR tryFrameSize(int framesize, int *widths, int nwidths)
 {
   uint32_t bitTimeX100 = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 100.0f);
-  // Measure from the center of the expected Stop Bit
-  uint32_t stopTimeX100 = (bitTimeX100 * (framesize - stopbits)) + (bitTimeX100 / 2);
-  
-  uint32_t wX100 = 0;
-  int framingErrors = 0;
+  uint32_t currentTime = 0;
+  uint32_t frameStartTime = 0;
+  bool inFrame = false;
+
   int validFrames = 0;
+  int framingErrors = 0;
 
-  // IMPORTANT: widths[0] is the state of the line when buildwidths started.
-  // UART Start bits are ALWAYS 0 (LOW). 
-  // If widths[0] was LOW, then even indices (2, 4...) are LOW.
-  // If widths[0] was HIGH, then even indices (2, 4...) are HIGH.
-  int startBitLevel = 0; // Standard UART logic
-
-  for (int i = 2; i < nwidths - 1; i++) {
-    uint32_t currentWidthX100 = (uint32_t)widths[i] * 100;
-    uint32_t nextWX100 = wX100 + currentWidthX100;
-
-    if (stopTimeX100 >= wX100 && stopTimeX100 < nextWX100) {
-      // Logic: The pulse covering the STOP bit position MUST be HIGH.
-      // In our toggle array, if widths[0] was HIGH, even indices are LOW. 
-      // If widths[0] was LOW, even indices are HIGH.
-      bool isHigh = (widths[0] == 0) ? (i % 2 == 0) : (i % 2 != 0);
-      
-      if (!isHigh) {
-        framingErrors++;
-        if (framingErrors > (validFrames / 10)) return 0; // Allow 10% jitter/error
-      } else {
-        validFrames++;
-      }
-      wX100 = 0; 
-    } else {
-      wX100 = nextWX100;
+  for (int i = 2; i < nwidths; i++) {
+    uint32_t pulseWidth = (uint32_t)widths[i] * 100;
+    
+    if (!inFrame) {
+        // LOW pulse is a potential Start bit
+        if (i % 2 == 0) { 
+            inFrame = true;
+            frameStartTime = currentTime;
+        }
     }
+
+    if (inFrame) {
+        uint32_t stopPosX100 = (bitTimeX100 * (framesize - 1)) + (bitTimeX100 / 2);
+        
+        if (currentTime + pulseWidth > frameStartTime + stopPosX100) {
+            // Reached the expected stop bit position
+            if (i % 2 != 0) { 
+                validFrames++; // Line is HIGH = Valid Stop
+            } else {
+                framingErrors++; // Line is LOW = Error
+            }
+            inFrame = false; // Synchronize to next falling edge
+        }
+    }
+    currentTime += pulseWidth;
   }
-  return (validFrames > 2); // Must see at least a few valid frames
+  return (validFrames >= 2 && framingErrors == 0); // Strict error-free requirement
 }
 
-// static int calcParity(int frameSize, int stopBits, int *widths, int nwidths)
-// {
-//   float width_timepos = 0.0;
-//   float bitTime = uartInfo[uartSpeedIndex].microsDelay;
-//   float stopTime = bitTime*((float)frameSize - (float)stopBits + 0.5);
-//   float frameTime = bitTime*(float)frameSize;
-//   float w;
-//   int bits[20];
-//   float dataTime = (float)bitTime * 1.5;
-//   int onBits = 0;
-//   int odd, even;
-//   int bitCount;
-//   int framingErrors;
+static void IRAM_ATTR analyzeFrames(int frameSize, int *widths, int nwidths, 
+                                    int *parity7, int *parity8, 
+                                    int *b8High, int *b9High, int *b10High, int *b11High,
+                                    int *dataVaried) 
+{
+  uint32_t bitTimeX100 = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 100.0f);
+  
+  int totalFrames = 0;
+  int even7 = 0, odd7 = 0, even8 = 0, odd8 = 0;
+  int c8 = 0, c9 = 0, c10 = 0, c11 = 0;
+  int firstBits[12] = {0};
+  
+  *dataVaried = 0;
+  uint32_t currentTime = 0, frameStartTime = 0;
+  bool inFrame = false;
 
-//   framingErrors = 0;
-//   bitCount = 0;
-//   odd = 0;
-//   even = 0;
-//   w = 0.0;
-//   for (int i = 2; i < nwidths-1; i++) {
-//     if (dataTime >= w && dataTime < (w + widths[i])) {
-//       bits[bitCount] = i % 2;
-//       if (i % 2)
-//         onBits++;
-//       if (bitCount < (frameSize - stopBits)) {
-//          dataTime += dataTime;
-//       }
-//     }
-//     if (stopTime >= w && stopTime < (w + widths[i])) {
-//       if ((i % 2) != widths[0]) {
-// //        Serial.printf("stop error\n");
-//         framingErrors++;
-//         if (framingErrors >= 1)
-//           return 0;
-//       }
-//       if (onBits & 1)
-//         odd++;
-//       else
-//         even++;
-//       w = 0.0;
-//       bitCount = 0;
-//       dataTime = (float)bitTime * 1.5;
-//       onBits = 0;
-//     } else {
-//       w += widths[i];
-//     }
-//   }
-// //  Serial.printf("odd %i even %i\n", odd, even);
-//   if (odd && even && min(odd,even) >= 1)
-//     return -1;
-//   if (odd)
-//     return 1;
-//   return 0;
-// }
+  for (int i = 2; i < nwidths; i++) {
+    uint32_t pulseWidth = (uint32_t)widths[i] * 100;
+    
+    if (!inFrame) {
+        if (i % 2 == 0) { inFrame = true; frameStartTime = currentTime; }
+    }
 
+    if (inFrame) {
+        uint32_t stopPosX100 = (bitTimeX100 * (frameSize - 1)) + (bitTimeX100 / 2);
+        
+        if (currentTime + pulseWidth > frameStartTime + stopPosX100) {
+            if (i % 2 != 0) { // Valid frame! Let's extract bits.
+                int bits[12] = {0};
+                for (int b = 0; b < 12; b++) {
+                    uint32_t sampleTime = frameStartTime + bitTimeX100 * (b + 1) + (bitTimeX100 / 2);
+                    uint32_t scanTime = 0;
+                    for (int j = 2; j < nwidths; j++) {
+                        scanTime += (uint32_t)widths[j] * 100;
+                        if (sampleTime < scanTime) {
+                            bits[b] = (j % 2 != 0) ? 1 : 0;
+                            break;
+                        }
+                    }
+                    if (sampleTime >= scanTime) bits[b] = 1; // Assume idle if out of bounds
+                }
+
+                if (totalFrames == 0) {
+                    for(int b=0; b<7; b++) firstBits[b] = bits[b];
+                } else {
+                    for(int b=0; b<7; b++) {
+                        if (bits[b] != firstBits[b]) *dataVaried = 1;
+                    }
+                }
+
+                int ones7 = 0;
+                for (int b = 0; b < 7; b++) ones7 += bits[b];
+                if ((ones7 + bits[7]) % 2 == 0) even7++; else odd7++;
+
+                int ones8 = ones7 + bits[7];
+                if ((ones8 + bits[8]) % 2 == 0) even8++; else odd8++;
+
+                if (bits[7] == 1) c8++;
+                if (bits[8] == 1) c9++;
+                if (bits[9] == 1) c10++;
+                if (bits[10] == 1) c11++;
+
+                totalFrames++;
+            }
+            inFrame = false;
+        }
+    }
+    currentTime += pulseWidth;
+  }
+
+  *parity7 = -1; *parity8 = -1;
+  *b8High = 0; *b9High = 0; *b10High = 0; *b11High = 0;
+
+  if (totalFrames >= 3) {
+    if (*dataVaried) { // Only trust parity if data payload actually changes
+        if (even7 == totalFrames) *parity7 = 0; else if (odd7 == totalFrames) *parity7 = 1; 
+        if (even8 == totalFrames) *parity8 = 0; else if (odd8 == totalFrames) *parity8 = 1;
+    }
+    if (c8 == totalFrames) *b8High = 1;
+    if (c9 == totalFrames) *b9High = 1;
+    if (c10 == totalFrames) *b10High = 1;
+    if (c11 == totalFrames) *b11High = 1;
+  }
+}
 
 static int IRAM_ATTR calcParity(int frameSize, int stopBits, int *widths, int nwidths)
 {
   uint32_t bitTimeX100 = (uint32_t)(uartInfo[uartSpeedIndex].microsDelay * 100.0f);
-  
-  // Theoretical timing for the center of the first data bit (1.5 bits in)
-  uint32_t dataTimeX100 = (bitTimeX100 * 3) / 2;
-  // Theoretical timing for the stop bit check
-  uint32_t stopTimeX100 = (bitTimeX100 * (frameSize - stopBits)) + (bitTimeX100 / 2);
-  
   uint32_t wX100 = 0;
-  int onBits = 0;
-  int odd = 0, even = 0;
-  int bitCount = 0;
-  int framingErrors = 0;
+  int evenMatches = 0, oddMatches = 0, totalFrames = 0;
 
   for (int i = 2; i < nwidths - 1; i++) {
     uint32_t pWidthX100 = (uint32_t)widths[i] * 100;
     uint32_t nextWX100 = wX100 + pWidthX100;
+    uint32_t stopPosX100 = (bitTimeX100 * (frameSize - stopBits)) + (bitTimeX100 / 2);
 
-    // Check Data Bits: If the "center" of a bit falls within this pulse
-    while (dataTimeX100 >= wX100 && dataTimeX100 < nextWX100) {
-      if ((i % 2) != widths[0]) { // bit is HIGH
-        onBits++;
+    if (stopPosX100 >= wX100 && stopPosX100 < nextWX100) {
+      if (i % 2 != 0) { // Stop bit must be High
+        int onBits = 0;
+        int pBitVal = 1;
+
+        // Sample 8 data bits (standard assumption)
+        for (int b = 0; b < 8; b++) {
+          uint32_t sample = bitTimeX100 * (b + 1) + (bitTimeX100 / 2);
+          uint32_t cw = 0;
+          for (int j = 2; j <= i; j++) {
+            cw += (uint32_t)widths[j] * 100;
+            if (sample < cw) {
+              if (j % 2 != 0) onBits++;
+              break;
+            }
+          }
+        }
+
+        // Sample 9th bit as Parity
+        uint32_t pSample = bitTimeX100 * 9 + (bitTimeX100 / 2);
+        uint32_t pcw = 0;
+        for (int j = 2; j <= i; j++) {
+          pcw += (uint32_t)widths[j] * 100;
+          if (pSample < pcw) {
+            pBitVal = (j % 2 != 0) ? 1 : 0;
+            break;
+          }
+        }
+
+        if ((onBits + pBitVal) % 2 == 0) evenMatches++; else oddMatches++;
+        totalFrames++;
       }
-      bitCount++;
-      // Move to the center of the NEXT bit
-      dataTimeX100 += bitTimeX100;
-    }
-
-    // Check Stop Bit: If this pulse aligns with the expected Stop Bit position
-    if (stopTimeX100 >= wX100 && stopTimeX100 < nextWX100) {
-      // Validate framing: Stop bit must be HIGH
-      if ((i % 2) != widths[0]) {
-        framingErrors++;
-        if (framingErrors >= 1) return -2; // Frame Error
-      }
-
-      // Parity check: Was the total count of '1's (including parity bit) even or odd?
-      if (onBits & 1) odd++;
-      else even++;
-
-      // Reset for next frame in the width buffer
       wX100 = 0;
-      bitCount = 0;
-      onBits = 0;
-      dataTimeX100 = (bitTimeX100 * 3) / 2;
     } else {
       wX100 = nextWX100;
     }
   }
 
-  if (odd && even) return -1; // Inconsistent (Mixed results suggest No Parity)
-  if (odd) return 1;          // Consistently Odd
-  return 0;                   // Consistently Even
+  if (totalFrames < 3) return -1;
+  if (evenMatches == totalFrames) return 0;
+  if (oddMatches == totalFrames) return 1;
+  return -1;
 }
 
 static int frameSize;
@@ -388,50 +398,79 @@ static int dataBits;
 static int parity;
 static float bitTime;
 
-#define nwidths 200 //was 200 for accuracy
-
+#define NWIDTHS 300 //was 200
 static int UART_line_settings_direct(struct bs_reply_s *reply, int index, int *widths)
 {
-  int ret;
   int pin = gpioIndex[index];
   uint32_t *reply_data;
 
-  pinMode(pin, (pin == D0) ? INPUT : INPUT_PULLUP);
+  pinMode(pin, (pin == 16) ? INPUT : INPUT_PULLUP);
+  if (buildwidths(pin, widths, NWIDTHS)) return -6; 
 
-  // Pass the externally allocated buffer
-  ret = buildwidths(pin, widths, nwidths);
-  if (ret) return -6; 
-
-  uartSpeedIndex = calcBaud(pin, widths, nwidths);
+  uartSpeedIndex = calcBaud(pin, widths, NWIDTHS);
   if (uartSpeedIndex < 0) return -1;
   
-  bitTime = uartInfo[uartSpeedIndex].microsDelay;
-
-  int detectedFrame = -1;
-  int prioritySizes[] = {10, 11, 9, 12, 8, 7, 13};
-  
-  for (int i = 0; i < 7; i++) {
-    if (tryFrameSize(prioritySizes[i], 1, widths, nwidths)) {
-      detectedFrame = prioritySizes[i];
+  // 1. Detect Smallest Valid Size (SVS) using the new timeline logic
+  int svs = -1;
+  int trySizes[] = {9, 10, 11, 12}; 
+  for (int i = 0; i < 4; i++) {
+    // FIX: Removed the extra '1' argument that caused the compiler error
+    if (tryFrameSize(trySizes[i], widths, NWIDTHS)) {
+      svs = trySizes[i];
       break; 
     }  
-    system_soft_wdt_feed(); // Keep alive during heavy math
   }
-  
-  if (detectedFrame < 0) return -1;
-  frameSize = detectedFrame;
+  if (svs < 0) return -1;
+  frameSize = svs;
 
-  stopBits = tryFrameSize(frameSize, 2, widths, nwidths) ? 2 : 1;
-  parity = calcParity(frameSize, stopBits, widths, nwidths);
+  // 2. Extract Statistics
+  int parity7, parity8, b8H, b9H, b10H, b11H, dataVaried;
+  // FIX: Arguments now match the 10-parameter signature of analyzeFrames
+  analyzeFrames(frameSize, widths, NWIDTHS, &parity7, &parity8, &b8H, &b9H, &b10H, &b11H, &dataVaried);
 
-  // Logic Correction for DataBits
-  if (parity < 0) { // None
-    parity = -1;
-    dataBits = frameSize - 1 - stopBits;
-  } else { // Even or Odd
-    dataBits = frameSize - 1 - stopBits - 1;
+  // 3. The Logic Bridge (Deterministic Mapping)
+  // We use the "Always High" bit counts to distinguish 1 vs 2 stop bits
+  if (svs == 9) {
+      dataBits = 7;
+      parity = -1;
+      stopBits = b9H ? 2 : 1;
+  } 
+  else if (svs == 10) {
+      if (parity7 >= 0) {
+          dataBits = 7;
+          parity = parity7;
+          stopBits = b10H ? 2 : 1;
+      } else {
+          dataBits = 8;
+          parity = -1;
+          stopBits = b10H ? 2 : 1;
+      }
+  } 
+  else if (svs == 11) {
+      if (parity8 >= 0) {
+          dataBits = 8;
+          parity = parity8;
+          stopBits = b11H ? 2 : 1;
+      } else if (parity7 >= 0) {
+          dataBits = 7;
+          parity = parity7;
+          stopBits = 2; // 7,P,2
+      } else {
+          dataBits = 8;
+          parity = -1;
+          stopBits = 2; // 8,N,2
+      }
+  }
+  else if (svs == 12) {
+      dataBits = 8;
+      parity = (parity8 >= 0) ? parity8 : -1;
+      stopBits = 2; 
+  }
+  else {
+      dataBits = 8; stopBits = 1; parity = -1; 
   }
 
+  // Pack the reply
   reply_data = (uint32_t *)&reply->bs_payload[0];
   reply_data[index*5 + 0] = gpio[index];
   reply_data[index*5 + 1] = dataBits;
@@ -446,7 +485,7 @@ struct bs_frame_s*
 UART_all_line_settings(struct bs_request_s *request)
 {
   struct bs_frame_s *reply;
-  int *widthsBuffer = (int *)malloc(nwidths * sizeof(int));
+  int *widthsBuffer = (int *)malloc(NWIDTHS * sizeof(int));
   if (widthsBuffer == NULL) return NULL;
 
   // Ensure we allocate enough space for the full payload
@@ -519,16 +558,15 @@ struct  bs_frame_s* IRAM_ATTR data_discovery(struct bs_request_s *request)
   return reply;
 }
 
-struct bs_frame_s*
-UART_passthrough(struct bs_request_s *request)
+struct bs_frame_s* UART_passthrough(struct bs_request_s *request)
 {
   uint32_t *request_args = (uint32_t *)&request->bs_payload[0];
   int rx_pin = gpioIndex[request_args[0]];
   int tx_pin = gpioIndex[request_args[1]];
-  uint32_t baud = request_args[2];
+  
+  uint32_t raw_baud = request_args[2];
+  uint32_t baud = raw_baud & 0x00FFFFFF; 
 
-  // At 160MHz, calculate cycles per bit
-  // 115200 baud -> ~1388 cycles per bit
   const uint32_t cycles_per_bit = 160000000UL / baud;
   const uint32_t half_bit = cycles_per_bit / 2;
 
@@ -536,7 +574,12 @@ UART_passthrough(struct bs_request_s *request)
   pinMode(tx_pin, OUTPUT);
   digitalWrite(tx_pin, HIGH);
   delay(20);
-  // ACK Sequence (Crucial for the PC tool to sync)
+
+  // Use globals or defaults if not set
+  int d_bits = g_dataBits ? g_dataBits : 8;
+  int parity_m = g_parity; // -1: None, 0: Even, 1: Odd
+  int stop_b = g_stopBits ? g_stopBits : 1;
+
   struct bs_frame_s *reply = (struct bs_frame_s *)malloc(BS_HEADER_SIZE);
   if (reply) {
     memcpy(reply, request, BS_HEADER_SIZE);
@@ -547,55 +590,74 @@ UART_passthrough(struct bs_request_s *request)
   }
 
   while (1) {
-    // MANUAL RX SAMPLING (DUT -> PC)
-    // Poll the pin. If it's LOW, a start bit has begun.
+    // --- RX Logic (Receive from Device, Send to USB) ---
     if (digitalRead(rx_pin) == LOW) {
       uint32_t start_cycles = asm_ccount();
       uint8_t data = 0;
+      // Sample data bits + parity (if applicable)
+      int total_to_sample = d_bits + (parity_m >= 0 ? 1 : 0);
 
-      noInterrupts(); // Stop everything to ensure perfect timing
-      
-      // Wait for 1.5 bits to hit the middle of first data bit
+      noInterrupts();
+      // Wait for Start Bit to pass
       while ((asm_ccount() - start_cycles) < (cycles_per_bit + half_bit));
-
-      for (int i = 0; i < 8; i++) {
-        data >>= 1;
-        if (digitalRead(rx_pin)) data |= 0x80;
-        
-        // Wait for the center of the next bit
-        // Target = Start + (bit_index + 2) bits + half_bit
+      
+      for (int i = 0; i < total_to_sample; i++) {
+        bool bit_val = digitalRead(rx_pin);
+        if (i < d_bits && bit_val) {
+            data |= (1 << i);
+        }
+        // Parity bit is sampled but ignored in this simple passthrough logic
         uint32_t target = start_cycles + (cycles_per_bit * (i + 2)) + half_bit;
         while (asm_ccount() < target);
       }
       interrupts();
 
-      // Direct write to Hardware FIFO
       while (((READ_PERI_REG(UART_STATUS(0)) >> UART_TXFIFO_CNT_S) & UART_TXFIFO_CNT) >= 120);
       WRITE_PERI_REG(UART_FIFO(0), data);
     }
 
-    // PC -> DUT
+    // --- TX Logic (Receive from USB, Send to Device) ---
     if (Serial.available() > 0) {
       uint8_t c = Serial.read();
-      if (c == 24) break; // Ctrl+X
-      
-      // Manual TX Bit-bang (more stable than SoftwareSerial at 160MHz)
+      if (c == 24) break; // Ctrl+X to exit
+
+      int p_bit = 0;
+      if (parity_m >= 0) {
+        int ones = 0;
+        for(int b=0; b < d_bits; b++) if ((c >> b) & 0x01) ones++;
+        // Even parity: p_bit makes total ones even. Odd parity: p_bit makes total ones odd.
+        p_bit = (parity_m == 0) ? (ones % 2) : !(ones % 2);
+      }
+
       noInterrupts();
       uint32_t bit_start = asm_ccount();
-      digitalWrite(tx_pin, LOW); // Start
-      for(int b=0; b<8; b++) {
-        while(asm_ccount() - bit_start < cycles_per_bit * (b+1));
+      digitalWrite(tx_pin, LOW); // Start bit
+      
+      // Data bits
+      for(int b=0; b < d_bits; b++) {
+        while(asm_ccount() - bit_start < cycles_per_bit * (b + 1));
         digitalWrite(tx_pin, (c >> b) & 0x01);
       }
-      while(asm_ccount() - bit_start < cycles_per_bit * 9);
-      digitalWrite(tx_pin, HIGH); // Stop
+
+      int current_bit_offset = d_bits + 1;
+      // Parity bit
+      if (parity_m >= 0) {
+        while(asm_ccount() - bit_start < cycles_per_bit * current_bit_offset);
+        digitalWrite(tx_pin, p_bit);
+        current_bit_offset++;
+      }
+
+      // Stop bits
+      while(asm_ccount() - bit_start < cycles_per_bit * current_bit_offset);
+      digitalWrite(tx_pin, HIGH); 
+      
+      if (stop_b >= 2) {
+        while(asm_ccount() - bit_start < cycles_per_bit * (current_bit_offset + 1));
+      }
       interrupts();
     }
-
-    // 3. Keep the WDT happy
     system_soft_wdt_feed();
   }
-
   return NULL;
 }
 
@@ -617,7 +679,19 @@ UART_discover_tx(struct bs_request_s *request)
   
   rxpin = request_args[0] - 1; 
   baudrate = request_args[1];
+  // Map Global Settings to EspSoftwareSerial Config
+  EspSoftwareSerial::Config config = SWSERIAL_8N1; 
 
+  if (g_dataBits == 7) {
+    if (g_parity == 0)      config = (g_stopBits >= 2) ? SWSERIAL_7E2 : SWSERIAL_7E1;
+    else if (g_parity == 1) config = (g_stopBits >= 2) ? SWSERIAL_7O2 : SWSERIAL_7O1;
+    else                    config = (g_stopBits >= 2) ? SWSERIAL_7N2 : SWSERIAL_7N1;
+  } else { 
+    // Default to 8 bits
+    if (g_parity == 0)      config = (g_stopBits >= 2) ? SWSERIAL_8E2 : SWSERIAL_8E1;
+    else if (g_parity == 1) config = (g_stopBits >= 2) ? SWSERIAL_8O2 : SWSERIAL_8O1;
+    else                    config = (g_stopBits >= 2) ? SWSERIAL_8N2 : SWSERIAL_8N1;
+  }
   for (txpin = 1; txpin < N_GPIO; txpin++) {
     system_soft_wdt_feed();
     yield(); // Giving the dog a bone
