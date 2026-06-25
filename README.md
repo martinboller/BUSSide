@@ -37,7 +37,7 @@ BUSSide is designed to interface with various hardware buses to assist in device
 
 ### 1. Hardware Requirements
 BUSSide has been tested on a NodeMCU v1 (often sold as v2 or even 3). You will need one of these devices connected to your host machine via USB.
-[Here's one on AliExpress](https://www.aliexpress.com/item/1005010165879727.html). Used together with the original BUSSide board or the [Burtleina board by Luca Bongiorni](https://github.com/whid-injector/) you have a nice extra tool for Hardware Penetration Testing to verify what you've found (or not) with the [WHIDBoard](https://github.com/whid-injector/WHIDBOARD) or other tools.
+[Here's one on AliExpress](https://www.aliexpress.com/item/1005010165879727.html). Used together with the original BUSSide board, the [Burtleina board by Luca Bongiorni](https://github.com/whid-injector/), or "just" a [NodeMCU Base board](https://www.aliexpress.com/item/1005005943100684.html), you have a nice extra tool for Hardware Penetration Testing to verify what you've found (or not) with the [WHIDBoard](https://github.com/whid-injector/WHIDBOARD)or other tools.
 
 ### 2. Installation
 
@@ -113,3 +113,39 @@ Pin Index | Label | Actual GPIO | Conflict / Status
 7 | D6 | 12 |
 8 | D7 | 13 |
 9 | D8 | 16 |
+
+## Usage Notes
+Pin 1 can be a bit weird and result in weird results. E.g. jtag discover pinout returns the following when using pin 1 (D0)
+``` busside
+BUSSide> jtag discover pinout 
++++ Syncing NodeMCU for Command: <jtag discover pinout>...
++++ Hunting for sync bytes (0xFE 0xCA)...
++++ Sync Achieved!
++++ Hunting for sync bytes (0xFE 0xCA)...
++++ Sync Achieved!
++++ Sending jtag pinout discovery command
++++ Hunting for sync bytes (0xFE 0xCA)...
++++ Sync Achieved!
+--- Warning: Found 4 interfaces, but received incomplete data (Length: 6)
++++ JTAG Discover Pinout Command Successfully Completed
+```
+But the following when using pins 2 - 
+``` busside
+BUSSide> jtag discover pinout 
++++ Syncing NodeMCU for Command: <jtag discover pinout>...
++++ Hunting for sync bytes (0xFE 0xCA)...
++++ Sync Achieved!
++++ Sending jtag pinout discovery command
++++ Hunting for sync bytes (0xFE 0xCA)...
++++ Sync Achieved!
++++ 1 JTAG interface(s) FOUND
+--- Interface #1:
+    TCK:   GPIO 4
+    TMS:   GPIO 3
+    TDI:   GPIO 2
+    TDO:   GPIO 6
+    nTRST: GPIO 5
++++ JTAG Discover Pinout Command Successfully Completed
+```
+
+Same is true for other functions.
